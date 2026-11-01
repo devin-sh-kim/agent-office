@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>華山派 수련장</title>
+<style>
+  :root { --ink: #2b1d22; --paper: #fbf7ef; --paper2: #f3ebdd; --rim: #ead9c4; --accent: #b4475f; --gold: #e0b84e;
+          --ok: #4fb286; --mid: #e3a33a; --bad: #d64545; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1d1418; color: var(--ink);
+               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; }
+  canvas#game { position: fixed; inset: 0; width: 100vw; height: 100vh; touch-action: none; display: block; }
+  button { font: inherit; }
+
+  /* 두루마리 느낌의 창 */
+  .win { background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 6px;
+         box-shadow: inset 0 0 0 2px var(--rim), 4px 4px 0 rgba(0,0,0,.45); }
+  .title { background: linear-gradient(#c65a73, #96294a); color: #fff; font-weight: 800; font-size: 13px;
+           padding: 3px 8px; text-shadow: 1px 1px 0 #55122a; border-bottom: 3px solid var(--ink);
+           display: flex; align-items: center; gap: 6px; border-radius: 3px 3px 0 0; }
+
+  /* 상단 문파 정보 */
+  #top { position: fixed; top: 6px; left: 6px; right: 6px; z-index: 2; display: flex; align-items: stretch;
+         gap: 6px; padding: 4px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  #top .plate { background: var(--ink); color: #f6dfe5; font-weight: 900; padding: 3px 12px 3px 8px; border-radius: 3px;
+                display: flex; align-items: center; gap: 6px; letter-spacing: .03em; }
+  #top .plate svg { flex: none; }
+  #top .cell { background: var(--paper2); border: 2px solid #dcc6a8; border-radius: 4px; padding: 2px 9px;
+               display: flex; align-items: center; gap: 5px; font-size: 13px; }
+  #top .cell .lbl { font-size: 11px; font-weight: 800; color: #fff; background: #8e3049; padding: 0 5px; border-radius: 3px; }
+  #top .cell b { font-size: 15px; }
+
+  /* 하단: 문파 소식 + 메뉴 */
+  #bottom { position: fixed; left: 6px; right: 6px; bottom: 6px; z-index: 2; display: flex; gap: 6px; height: 96px; }
+  #log { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+  #logLines { flex: 1; padding: 4px 8px; font-size: 13px; line-height: 1.45; display: flex; flex-direction: column;
+              justify-content: flex-end; overflow: hidden; }
+  #logLines div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #logLines .tm { color: #a08770; font-size: 11px; margin-right: 5px; font-variant-numeric: tabular-nums; }
+  #logLines .nm { font-weight: 800; }
+  #menu { display: grid; grid-template-columns: repeat(4, 60px); gap: 6px; }
+  .btn { background: linear-gradient(#fffaf0, #efdfc4); color: var(--ink); border: 3px solid var(--ink); border-radius: 6px;
+         box-shadow: inset 0 -3px 0 #c9a77a, 3px 3px 0 rgba(0,0,0,.45); cursor: pointer; text-decoration: none;
+         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 22px; padding: 0; }
+  .btn span { font-size: 12px; font-weight: 800; }
+  .btn:active { transform: translate(2px, 2px); box-shadow: inset 0 -1px 0 #c9a77a, 1px 1px 0 rgba(0,0,0,.45); }
+
+  #hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: 112px; background: rgba(43,29,34,.86); color: #fbf7ef;
+          padding: 4px 12px; border-radius: 12px; font-size: 12px; z-index: 2; pointer-events: none; max-width: 92vw; text-align: center; }
+  #toasts { position: fixed; top: 64px; right: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
+  .toast { background: var(--paper); border: 3px solid var(--ink); padding: 6px 10px; border-radius: 6px; font-size: 13px;
+           font-weight: 700; box-shadow: 3px 3px 0 rgba(0,0,0,.4); animation: pop .25s ease-out; }
+  @keyframes pop { from { transform: scale(.7); opacity: 0; } }
+
+  /* 대화창 */
+  #dlg { position: fixed; left: 50%; bottom: 112px; transform: translateX(-50%); width: min(760px, calc(100vw - 16px));
+         z-index: 4; display: flex; gap: 12px; padding: 12px; cursor: pointer; }
+  #dlg[hidden] { display: none; }
+  .portrait { image-rendering: pixelated; background: linear-gradient(#f8e6ea, #efd9c6); border: 3px solid var(--ink); border-radius: 6px; flex: none; }
+  #portrait { width: 84px; height: 84px; }
+  #dlg .body { flex: 1; min-width: 0; }
+  #dlg .who { font-weight: 800; font-size: 15px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #dlg .who .role { font-weight: 600; font-size: 12px; color: #80606a; }
+  #dlg .text { margin-top: 6px; font-size: 15px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+               min-height: 4.6em; max-height: 36vh; overflow-y: auto; }
+  #dlg .foot { display: flex; justify-content: space-between; font-size: 12px; color: #a08770; margin-top: 4px; }
+  #dlg .next { animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .chip { font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 4px; color: #fff; }
+
+  /* 모달 (제자 명부 / 장부) */
+  #modal { position: fixed; inset: 0; z-index: 5; background: rgba(20,8,12,.5); display: flex; align-items: center; justify-content: center; }
+  #modal[hidden] { display: none; }
+  #modal .sheet { width: min(860px, 96vw); max-height: 84vh; display: flex; flex-direction: column; }
+  #modal .title { font-size: 15px; padding: 6px 10px; }
+  #modal .title button { margin-left: auto; background: var(--ink); color: #fff; border: 0; border-radius: 4px;
+                         width: 26px; height: 24px; cursor: pointer; font-weight: 900; }
+  #mBody { overflow-y: auto; padding: 10px; }
+  .staff { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+  .card { background: var(--paper2); border: 2px solid #dcc6a8; border-radius: 6px; padding: 8px; display: flex; gap: 8px; }
+  .card .portrait { width: 56px; height: 56px; }
+  .card .info { flex: 1; min-width: 0; font-size: 12px; }
+  .card .nm { font-weight: 800; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .sub { color: #80606a; margin: 1px 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat { display: grid; grid-template-columns: 42px 1fr 46px; align-items: center; gap: 5px; margin: 2px 0; }
+  .stat .k { font-weight: 800; color: #8e3049; font-size: 11px; }
+  .stat .v { text-align: right; font-variant-numeric: tabular-nums; font-size: 11px; }
+  .gauge { height: 8px; background: #e8dcc8; border: 1px solid #bba584; border-radius: 2px; overflow: hidden; }
+  .gauge i { display: block; height: 100%; background: var(--ok); }
+  .card .act { margin-top: 6px; display: flex; gap: 6px; align-items: center; }
+  .card .act .st { flex: 1; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini { background: linear-gradient(#fffaf0, #efdfc4); border: 2px solid var(--ink); border-radius: 4px; padding: 2px 8px;
+          font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 2px 2px 0 rgba(0,0,0,.35); }
+  .rep h3 { margin: 6px 0; font-size: 14px; background: var(--ink); color: #f6dfe5; display: inline-block; padding: 2px 10px; border-radius: 3px; }
+  .rep table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
+  .rep td, .rep th { border-bottom: 1px dashed #dcc6a8; padding: 5px 6px; text-align: left; }
+  .rep th { color: #8e3049; font-size: 12px; }
+  .awards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+  .award { background: var(--paper2); border: 2px solid #dcc6a8; border-radius: 6px; padding: 8px; display: flex; gap: 8px; align-items: center; }
+  .award .portrait { width: 44px; height: 44px; }
+  .award .what { font-size: 12px; font-weight: 800; color: #a83552; }
+  .award .who2 { font-weight: 800; }
+  .award .why { font-size: 12px; color: #80606a; }
+
+  /* 양옆 제자 목록 */
+  .side { position: fixed; z-index: 2; display: flex; flex-direction: column; overflow: hidden; }
+  .side[hidden] { display: none; }
+  #sideL { left: 6px; } #sideR { right: 6px; }
+  .side .list { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+  .side .empty { color: #a08770; font-size: 13px; text-align: center; padding: 20px 6px; }
+  .row { background: var(--paper2); border: 2px solid #dcc6a8; border-radius: 6px; padding: 5px 6px; display: flex;
+         gap: 7px; cursor: pointer; align-items: center; }
+  .row:hover, .row.on { border-color: var(--accent); background: #fbecee; }
+  .row .portrait { width: 44px; height: 44px; border-width: 2px; }
+  .row .info { flex: 1; min-width: 0; font-size: 12px; line-height: 1.35; }
+  .row .nm { font-weight: 800; font-size: 13px; display: flex; gap: 4px; align-items: center; }
+  .row .nm span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .nm .chip { font-size: 10px; padding: 0 4px; flex: none; }
+  .row .st, .row .la { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .la { color: #8a7068; font-size: 11px; }
+  .row .gauge { height: 6px; margin: 2px 0; }
+
+  @media (max-width: 640px) {
+    #bottom { height: 84px; }
+    #menu { grid-template-columns: repeat(4, 44px); gap: 4px; }
+    .btn { font-size: 17px; } .btn span { font-size: 10px; }
+    #logLines { font-size: 12px; }
+    #hint, #dlg { bottom: 98px; }
+    #top { gap: 4px; padding: 3px; }
+    #top .plate { font-size: 12px; padding: 2px 8px 2px 5px; }
+    #top .cell { font-size: 11px; padding: 1px 6px; gap: 3px; }
+    #top .cell b { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="top" class="win">
+  <div class="plate"><svg width="18" height="18" viewBox="-10 -10 20 20" aria-hidden="true">
+    <g fill="#e2577a"><circle cx="0" cy="-5" r="4.4"/><circle cx="4.76" cy="-1.55" r="4.4"/><circle cx="2.94" cy="4.05" r="4.4"/>
+    <circle cx="-2.94" cy="4.05" r="4.4"/><circle cx="-4.76" cy="-1.55" r="4.4"/></g><circle r="2.6" fill="#f5c542"/></svg>
+    <span id="co">華山派</span></div>
+  <div class="cell"><span class="lbl">시진</span><span id="date"></span></div>
+  <div class="cell"><span class="lbl">제자</span><b id="sN">0</b>명</div>
+  <div class="cell">⚔️ 수련 <b id="sB">0</b></div>
+  <div class="cell">🍵 정비 <b id="sI">0</b></div>
+  <div class="cell">💤 낮잠 <b id="sS">0</b></div>
+  <div class="cell"><span class="lbl">재정</span><b id="sC">-</b></div>
+</div>
+<div id="sideL" class="win side" hidden><div class="title">⚔️ 수련 중 <span id="cntL"></span></div><div class="list" id="listL"></div></div>
+<div id="sideR" class="win side" hidden><div class="title">🍵 개인정비 · 💤 낮잠 <span id="cntR"></span></div><div class="list" id="listR"></div></div>
+<div id="toasts"></div>
+<div id="hint"></div>
+<div id="bottom">
+  <div id="log" class="win"><div class="title">🔔 문파 소식</div><div id="logLines"></div></div>
+  <div id="menu">
+    <button class="btn" id="bStaff">👥<span>제자</span></button>
+    <button class="btn" id="bReport">📜<span>장부</span></button>
+    <a class="btn" href="/studio">🏢<span>스튜디오</span></a>
+    <a class="btn" href="/">📋<span>목록</span></a>
+  </div>
+</div>
+<div id="dlg" class="win" hidden>
+  <canvas id="portrait" class="portrait" width="24" height="24"></canvas>
+  <div class="body">
+    <div class="who"><span id="dName"></span><span class="chip" id="dKind"></span><span class="role" id="dRole"></span></div>
+    <div class="text" id="dText"></div>
+    <div class="foot"><span id="dPage"></span><span class="next" id="dNext">▼ Space / 탭</span></div>
+  </div>
+</div>
+<div id="modal" hidden>
+  <div class="win sheet">
+    <div class="title"><span id="mTitle"></span><button id="mClose">✕</button></div>
+    <div id="mBody"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// ============================================================ 기본 설정
+const T = 16;                       // 타일 크기(논리 px)
+const COLS = 4;                     // 수련 자리 줄당 수 (짝수: 옆자리끼리 대련)
+const TOPR = 4;                     // 위쪽 본전 영역(타일 행)
+const SLEEP_AFTER = 3600;           // 이만큼(초) 대기하면 낮잠
+const SKY = 240;                    // 배경 캐시에서 월드 위쪽으로 더 그리는 하늘 높이
+const KIND = {
+  claude: { color: "#d97757", label: "Claude" },
+  codex:  { color: "#4f7cf0", label: "Codex" },
+  grok:   { color: "#3a3f4b", label: "Grok" },
+};
+const C = {
+  robe: "#f7f3ec", robeS: "#d6cdbf", trim: "#b4475f", belt: "#221b1f", beltH: "#3d3238", pants: "#2a2329", shoe: "#1a1418",
+  wrap: "#2e262b", eye: "#2a1c22", blush: "#f2a3a8", red: "#cf3b55", gold: "#e0b84e", steel: "#e6ecf2", steelS: "#8d96a3",
+  straw: "#d6b26c", strawS: "#a8843e", cel: "#a8d0bd", scroll: "#efe2bf", wood: "#7a4a2a", scab: "#3b2a22", OL: "#2a1c22",
+};
+const HAIR = ["#1f1a1d", "#2b2024", "#3b2a22", "#4a3326", "#1c2230", "#5a3d2b", "#2a2a33", "#6e6a72"];
+const SKIN = ["#f9dcc4", "#f3cdb0", "#e8b893", "#cf9670"];
+
+const cv = document.getElementById("game");
+const ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
+
+let W = 27, H = 17, solid = [], slots = [], loungeTiles = [], deco = [], DOOR_X = 12;
+let bossSeat = { x: 0, y: 0 };
+
+// ============================================================ 맵 생성
+function buildWorld(nSlots) {
+  const rows = Math.max(2, Math.ceil(nSlots / COLS));
+  H = TOPR + 5 + rows * 4;
+  solid = [];
+  for (let y = 0; y < H; y++) {
+    solid.push([]);
+    for (let x = 0; x < W; x++) solid[y].push(x === 0 || x === W - 1 || y < TOPR || y === H - 1);
+  }
+  const block = (x, y, w = 1, h = 1) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) solid[y + j][x + i] = true; };
+  // 산문
+  DOOR_X = 12; solid[H - 1][12] = solid[H - 1][13] = false;
+  // 수련 자리: 서는 곳(seatY) → 목인장(seatY+1) → 통로 2줄 (머리 위 라벨 공간)
+  slots = [];
+  for (let r = 0; r < rows; r++) {
+    const seatY = TOPR + 1 + r * 4;
+    for (let i = 0; i < COLS; i++) {
+      const dx = 2 + i * 4;
+      block(dx, seatY + 1, 2, 1);
+      slots.push({ idx: slots.length, dx, seatY, deskY: seatY + 1, hitT: 0 });
+    }
+  }
+  // 정원과 소품
+  deco = [
+    { t: "plum", x: 18, y: TOPR }, { t: "plum", x: 18, y: H - 2 },
+    { t: "rack", x: 20, y: TOPR, w: 2 }, { t: "jar", x: 23, y: TOPR }, { t: "plum", x: 25, y: TOPR },
+    { t: "teatable", x: 21, y: TOPR + 3, w: 2 }, { t: "lantern", x: 25, y: TOPR + 3 },
+    { t: "lantern", x: 20, y: H - 3 }, { t: "plum", x: 25, y: H - 2 },
+    { t: "boss", x: 2, y: H - 3, w: 3 }, { t: "banner", x: 1, y: H - 5 },
+  ];
+  for (const d of deco) block(d.x, d.y, d.w || 1, 1);
+  bossSeat = { x: 3.5 * T, y: (H - 4) * T + 12 };
+  loungeTiles = [];
+  for (let y = TOPR + 1; y < H - 1; y++) for (let x = 20; x <= 25; x++) if (!solid[y][x]) loungeTiles.push({ x, y });
+}
+const walkable = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !solid[y][x];
+
+function findPath(sx, sy, tx, ty) {
+  if (!walkable(tx, ty)) return null;
+  const key = (x, y) => y * W + x, start = key(sx, sy), prev = new Map([[start, -1]]), q = [[sx, sy]];
+  for (let qi = 0; qi < q.length; qi++) {
+    const [x, y] = q[qi];
+    if (x === tx && y === ty) {
+      const path = [];
+      for (let k = key(x, y); k !== start; k = prev.get(k)) path.push({ x: k % W, y: Math.floor(k / W) });
+      return path.reverse();
+    }
+    for (const [ddx, ddy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + ddx, ny = y + ddy, k = key(nx, ny);
+      if (walkable(nx, ny) && !prev.has(k)) { prev.set(k, key(x, y)); q.push([nx, ny]); }
+    }
+  }
+  return null;
+}
+const tileOf = e => ({ x: Math.floor(e.x / T), y: Math.floor(e.y / T) });
+
+// ============================================================ 엔티티
+function hash(s) { let h = 2166136261; for (const c of String(s)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
+function makeLook(s) {
+  const h = hash(s.session_id || s.pid), hat = s.mode === "headless" ? "straw" : "";
+  return {
+    id: `${s.kind}-${h}-${hat}`, skin: SKIN[h % SKIN.length], hair: HAIR[(h >>> 3) % HAIR.length], style: (h >>> 6) % 5,
+    band: KIND[s.kind].color, robe: C.robe, robeS: C.robeS, trim: C.trim, hat,
+  };
+}
+const player = {
+  x: 0, y: 0, dir: "down", anim: 0, moving: false, path: [], speed: 72,
+  look: { id: "master", skin: SKIN[1], hair: "#1c1a1e", style: 0, band: C.gold, robe: "#8a2b42", robeS: "#62182b",
+          trim: C.gold, inner: C.robe, hat: "master" },
+};
+const npcs = new Map();   // pid -> npc
+let firstSync = true, serverOffset = 0, host = "";
+const now = () => Date.now() / 1000 + serverOffset;
+
+function followPath(e, dt) {
+  if (!e.path.length) { e.moving = false; return true; }
+  const wp = e.path[0];
+  const tx = wp.px ?? wp.x * T + T / 2, ty = wp.py ?? wp.y * T + 12;
+  const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), step = e.speed * dt;
+  if (d <= step) { e.x = tx; e.y = ty; e.path.shift(); } else { e.x += dx / d * step; e.y += dy / d * step; }
+  if (d > 0.01) e.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+  e.moving = true; e.anim += dt;
+  return !e.path.length;
+}
+
+// ============================================================ 상태 해석
+function idleSecs(s) {
+  const t = s.status_since || s.last_activity;
+  return t ? now() - t : 0;
+}
+function mood(s) {
+  if (s.status === "stopped") return "stopped";
+  if (s.status === "idle") return idleSecs(s) >= SLEEP_AFTER ? "sleep" : "rest";
+  if (s.status === "busy") return "work";
+  return "unknown";
+}
+function ctxPct(s) { return s.ctx_used != null && s.ctx_window ? Math.min(100, s.ctx_used / s.ctx_window * 100) : null; }
+function shortDur(sec) {
+  if (sec == null || !isFinite(sec) || sec < 0) return "";
+  if (sec < 60) return Math.floor(sec) + "초";
+  if (sec < 3600) return Math.floor(sec / 60) + "분";
+  if (sec < 86400) return Math.floor(sec / 3600) + "시간";
+  return Math.floor(sec / 86400) + "일";
+}
+function longDur(sec) {
+  if (sec == null || !isFinite(sec) || sec < 0) return "-";
+  sec = Math.floor(sec);
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+  if (d) return `${d}일 ${h}시간`;
+  if (h) return `${h}시간 ${m}분`;
+  if (m) return `${m}분`;
+  return `${sec}초`;
+}
+// 개인정비 종류는 5분마다 바뀐다
+const REST_ACTS = ["meditate", "tea", "polish", "read", "stretch"];
+const REST_TXT = { meditate: "🧘 운기조식", tea: "🍵 차 한잔", polish: "✨ 검 손질", read: "📜 비급 열람", stretch: "🙆 몸풀기" };
+const REST_SAY = { meditate: "운기조식을 하며", tea: "차를 한잔 마시며", polish: "검을 손질하며", read: "비급을 읽으며", stretch: "몸을 풀며" };
+const restAct = pid => REST_ACTS[hash(pid + ":" + Math.floor(now() / 300)) % REST_ACTS.length];
+
+function badge(s) {
+  const k = helperBusy(s).length;
+  return badgeBase(s) + (k ? ` 🌱${k}` : "");
+}
+function badgeBase(s) {
+  const m = mood(s), pct = ctxPct(s), n = npcs.get(s.pid);
+  const since = s.status_since ? now() - s.status_since : s.elapsed;
+  if (m === "work") {
+    let icon = s.phase === "shell" ? "🌀" : n && partnerOf(n) ? "🤺" : s.mode === "headless" ? "🗡️" : "⚔️";
+    if (pct != null && pct >= 80) icon = "🥵";
+    return `${icon} ${shortDur(since)}`;
+  }
+  if (m === "rest") return `${REST_TXT[restAct(s.pid)].split(" ")[0]} ${shortDur(idleSecs(s))}`;
+  if (m === "sleep") return `💤 ${shortDur(idleSecs(s))}`;
+  if (m === "stopped") return "🧊 점혈";
+  return "❓";
+}
+const NICKS = ["운학", "청하", "백설", "연화", "무진", "소혜", "진월", "매향", "현무", "설화", "도원", "비연", "한결", "서린", "초명", "은월"];
+const nicks = new Map();   // pid -> 도호 (현재 쓰는 이름과 겹치지 않게)
+function nickOf(pid) {
+  if (!nicks.has(pid)) {
+    const used = new Set([...nicks].filter(([p]) => npcs.has(p)).map(([, v]) => v));
+    let i = hash(pid) % NICKS.length, tries = 0;
+    while (used.has(NICKS[i]) && tries++ < NICKS.length) i = (i + 1) % NICKS.length;
+    nicks.set(pid, tries > NICKS.length ? `${NICKS[i]}${pid % 100}` : NICKS[i]);
+  }
+  return nicks.get(pid);
+}
+function displayName(s) {
+  if (s.name || s.title) return s.name || s.title;
+  const base = (s.cwd || "").split("/").filter(Boolean).pop();
+  if (s.mode === "headless" || !base) return `${nickOf(s.pid)} (객원)`;
+  return base;
+}
+function jobTitle(s) {
+  const m = (s.model || "").toLowerCase();
+  const t = m.includes("opus") ? "일대제자" : m.includes("sonnet") ? "이대제자" : m.includes("haiku") ? "삼대제자"
+          : s.kind === "codex" ? "외당 제자" : s.kind === "grok" ? "속가 제자" : "제자";
+  return s.mode === "headless" ? `객원 무사 · ${t}` : t;
+}
+const FLAMES = { minimal: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5 };
+const flames = e => e in FLAMES ? "🔥".repeat(FLAMES[e]) || "·" : "";
+
+// ============================================================ 동기화
+let slotOwner = [];   // slot idx -> pid
+function ensureSlot(n) {
+  if (n.slot != null) return;
+  let i = slotOwner.findIndex(p => p == null);
+  if (i < 0 || i >= slots.length) {
+    const used = slotOwner.filter(p => p != null).length, oldH = H;
+    buildWorld(Math.ceil((used + 4) / COLS) * COLS);
+    slotOwner.length = slots.length;
+    i = slotOwner.findIndex(p => p == null);
+    // 수련 자리 줄이 늘면 장문인 단상·산문 구역이 아래로 밀리므로, 그 구역에 있던 사람도 함께 옮긴다
+    const dy = (H - oldH) * T;
+    for (const e of [player, ...npcs.values()]) {
+      if (e === n || e.y < (oldH - 4) * T || e.x >= 20 * T) continue;
+      e.y += dy; e.path = [];
+      if (e !== player) e.goal = null;
+    }
+    if (!walkable(tileOf(player).x, tileOf(player).y)) Object.assign(player, bossSeat, { path: [] });
+  }
+  slotOwner[i] = n.pid; n.slot = i;
+}
+
+function toast(msg) {
+  const el = document.createElement("div");
+  el.className = "toast"; el.textContent = msg;
+  $("toasts").prepend(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+async function sync() {
+  let data;
+  try { data = await (await fetch("/api/sessions", { cache: "no-store" })).json(); }
+  catch { return; }
+  serverOffset = data.now - Date.now() / 1000;
+  host = data.host;
+  const seen = new Set();
+  if (firstSync) {
+    buildWorld(Math.max(8, Math.ceil((data.sessions.length + 2) / COLS) * COLS));
+    slotOwner = new Array(slots.length).fill(null);
+    Object.assign(player, bossSeat);
+  }
+  for (const s of data.sessions) {
+    seen.add(s.pid);
+    let n = npcs.get(s.pid);
+    if (!n) {
+      n = { pid: s.pid, kind: s.kind, look: makeLook(s), x: 0, y: 0, dir: "down",
+            anim: Math.random(), moving: false, path: [], speed: 40 + Math.random() * 10, goal: null, wait: 0,
+            alpha: 1, data: s };
+      npcs.set(s.pid, n);
+      ensureSlot(n);
+      if (firstSync) placeAtGoal(n);
+      else {
+        Object.assign(n, { x: (DOOR_X + .5) * T, y: (H - 1) * T + 12 });
+        toast(`🌸 새 제자 ${KIND[s.kind].label} 「${displayName(s)}」 입문!`);
+        addLog(s, `🙇 ${jobTitle(s)}(으)로 입문했습니다! (${s.model || "심법 미상"})`);
+      }
+    }
+    detectActivity(n, s);
+    if (n.data && n.data.status !== s.status && !firstSync) {
+      if (mood(s) === "work") addLog(s, "⚔️ 수련을 시작했습니다.");
+      else if (s.status === "idle") addLog(s, "🍵 수련을 마치고 개인정비에 들어갑니다.");
+    }
+    n.data = s;
+    syncHelpers(n, s);
+  }
+  for (const n of npcs.values()) {
+    if (!seen.has(n.pid) && !n.leaving) {
+      n.leaving = true;
+      toast(`👋 「${displayName(n.data)}」 하산합니다`);
+      addLog(n.data, `👋 하산했습니다. (수련 ${longDur(n.data.elapsed)})`);
+    }
+  }
+  if (!$("modal").hidden && modalKind === "staff") renderStaff();
+  renderSide();
+  firstSync = false;
+  updateHud();
+}
+
+// ============================================================ 문파 소식 & 팝업
+const logs = [];
+const popups = [];
+function addLog(s, text) {
+  logs.push({ at: new Date(), s, text });
+  if (logs.length > 40) logs.shift();
+  renderLog();
+}
+function renderLog() {
+  const box = $("logLines");
+  const rows = logs.slice(innerWidth < 640 ? -2 : -3);
+  if (!rows.length) {
+    box.innerHTML = `<div>🌸 화산에 오신 것을 환영합니다, 장문인! 제자를 탭하거나 다가가 Space를 누르면 수련 보고를 받을 수 있습니다.</div>`;
+    return;
+  }
+  box.innerHTML = rows.map(r => `<div><span class="tm">${r.at.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>`
+    + `<span class="nm" style="color:${KIND[r.s.kind].color}">${esc(displayName(r.s))}</span> ${esc(r.text)}</div>`).join("");
+}
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const actKey = a => a ? `${a.t}|${a.text}` : "";
+function detectActivity(n, s) {
+  const acts = s.activity || [];
+  const last = actKey(acts[acts.length - 1]);
+  if (n.lastAct === undefined || firstSync) { n.lastAct = last; return; }
+  if (last === n.lastAct) return;
+  const idx = acts.findIndex(a => actKey(a) === n.lastAct);
+  const fresh = (idx >= 0 ? acts.slice(idx + 1) : acts.slice(-1)).slice(-3);
+  n.lastAct = last;
+  const base = performance.now() / 1000;
+  fresh.forEach((a, i) => {
+    const label = a.kind === "tool" ? "+⚔️ " + a.text.split(":")[0].replace(/^mcp__\w+?__/, "") : "+📜 보고";
+    popups.push({ n, text: label.length > 18 ? label.slice(0, 17) + "…" : label, kind: a.kind, t0: base + i * .7 });
+    addLog(s, `${a.kind === "tool" ? "⚔️" : "📜"} ${a.text}`);
+  });
+}
+
+// ============================================================ 이동 목표
+// 옆자리(짝) 제자도 수련 중이면 둘이 가운데로 나와 대련한다
+function partnerOf(n) {
+  if (n.slot == null || n.leaving || mood(n.data) !== "work") return null;
+  const pid = slotOwner[n.slot ^ 1];
+  const p = pid == null ? null : npcs.get(pid);
+  return p && !p.leaving && mood(p.data) === "work" ? p : null;
+}
+function goalOf(n) {
+  if (n.leaving) return "door";
+  const m = mood(n.data);
+  if (m === "rest" || m === "sleep") return "lounge";
+  return partnerOf(n) ? "spar" : "seat";
+}
+function seatPos(n, goal = n.goal) {
+  const s = slots[n.slot], y = s.seatY * T + 12;
+  if (goal !== "spar") return { x: (s.dx + 1) * T, y };
+  const left = n.slot % 2 === 0, L = left ? s.dx : s.dx - 4, mid = (L + 3) * T;
+  return { x: mid + (left ? -18 : 18), y };
+}
+const sparDir = n => n.slot % 2 === 0 ? "right" : "left";
+function pickLounge(n) {
+  const taken = new Set([...npcs.values()].filter(o => o !== n && o.lt).map(o => o.lt.x + "," + o.lt.y));
+  const free = loungeTiles.filter(t => !taken.has(t.x + "," + t.y));
+  const pool = free.length ? free : loungeTiles;
+  // 머리 위 라벨이 겹치지 않도록 다른 제자와 가장 먼 후보를 고른다
+  const others = [...npcs.values()].filter(o => o !== n && o.lt).map(o => o.lt);
+  let best = null, bd = -1;
+  for (let i = 0; i < 8; i++) {
+    const c = pool[Math.floor(Math.random() * pool.length)];
+    const d = Math.min(99, ...others.map(o => Math.abs(o.x - c.x) * 1.5 + Math.abs(o.y - c.y)));
+    if (d > bd) { bd = d; best = c; }
+  }
+  return (n.lt = best);
+}
+function placeAtGoal(n) {
+  n.goal = goalOf(n);
+  if (n.goal === "seat" || n.goal === "spar") { Object.assign(n, seatPos(n)); n.dir = n.goal === "spar" ? sparDir(n) : "down"; }
+  else { const t = pickLounge(n); n.x = t.x * T + 8; n.y = t.y * T + 12; n.wait = 10 + Math.random() * 20; }
+}
+function planPath(n) {
+  const st = tileOf(n);
+  if (n.goal === "seat" || n.goal === "spar") {
+    const p = seatPos(n), tt = tileOf(p), path = findPath(st.x, st.y, tt.x, tt.y);
+    n.path = [...(path || []), { px: p.x, py: p.y }];
+  } else if (n.goal === "lounge") {
+    const t = pickLounge(n);
+    n.path = findPath(st.x, st.y, t.x, t.y) || [];
+    n.wait = mood(n.data) === "sleep" ? 1e9 : 15 + Math.random() * 25;
+  } else {
+    n.path = [...(findPath(st.x, st.y, DOOR_X, H - 1) || []), { px: (DOOR_X + .5) * T, py: H * T + 6 }];
+  }
+}
+
+function updateNpc(n, dt) {
+  const g = goalOf(n);
+  if (g !== n.goal) { if (n.goal === "lounge") n.lt = null; n.goal = g; planPath(n); }
+  if (dlg && dlg.npc === n) {          // 대화 중엔 멈춰서 장문인을 바라본다
+    n.moving = false;
+    n.dir = faceTo(n, player);
+    return;
+  }
+  if (n.path.length) { followPath(n, dt); return; }
+  n.moving = false;
+  if (n.goal === "seat") n.dir = "down";
+  else if (n.goal === "spar") n.dir = sparDir(n);
+  else if (n.goal === "lounge") { n.wait -= dt; if (n.wait <= 0) planPath(n); }
+  else if (n.goal === "door") {
+    n.alpha -= dt * 2;
+    if (n.alpha <= 0) { npcs.delete(n.pid); slotOwner[n.slot] = null; updateHud(); }
+  }
+  n.anim += dt;
+}
+function faceTo(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+}
+const arrived = n => !n.path.length && !n.leaving;
+
+// ============================================================ 서브에이전트 → 사제
+const HELPER_MAX = 2;                       // 제자 한 명 곁에 보이는 사제 수 (나머지는 배지 숫자로만)
+const helperBusy = s => (s.subagents || []).filter(a => a.status === "busy");
+function helperName(a) {
+  const t = String(a.name || a.type || "사제").replace(/^\[[^\]]*\]\s*/, "");
+  return t.length > 14 ? t.slice(0, 13) + "…" : t;
+}
+function syncHelpers(n, s) {
+  n.helpers = n.helpers || new Map();
+  const live = helperBusy(s), ids = new Set(live.map(a => a.id));
+  for (const a of live) {
+    let h = n.helpers.get(a.id);
+    if (!h) {
+      const used = new Set([...n.helpers.values()].filter(o => !o.leaving).map(o => o.idx));
+      let idx = 0;
+      while (used.has(idx)) idx++;
+      const look = makeLook({ kind: n.kind, session_id: (s.session_id || n.pid) + ":" + a.id });
+      Object.assign(look, { id: look.id + "-sub", style: 3 });   // 짧은 머리 + 머리띠 = 사제
+      h = { id: a.id, parent: n, idx, x: n.x, y: n.y, dir: "down", anim: Math.random(), moving: false,
+            alpha: firstSync ? 1 : 0, snap: firstSync, look, data: a, seed: hash(a.id) % 97 / 97 };
+      n.helpers.set(a.id, h);
+      if (!firstSync) addLog(s, `🌱 사제 「${helperName(a)}」에게 과제를 나눠 맡겼습니다.`);
+    }
+    h.data = a;
+  }
+  for (const h of n.helpers.values())
+    if (!ids.has(h.id) && !h.leaving) {
+      h.leaving = true;
+      if (!firstSync) addLog(s, `✅ 사제 「${helperName(h.data)}」이(가) 과제를 마쳤습니다.`);
+    }
+}
+function helperTarget(n, h) {
+  // 대련 중이면 상대와 반대쪽(바깥)에, 아니면 양옆에 선다
+  if (n.goal === "spar" && arrived(n)) { const side = n.slot % 2 === 0 ? -1 : 1; return { x: n.x + side * (22 + 16 * h.idx), y: n.y }; }
+  return { x: n.x + (h.idx % 2 ? -22 : 22), y: n.y };
+}
+function updateHelpers(n, dt) {
+  if (!n.helpers) return;
+  for (const h of [...n.helpers.values()]) {
+    if (h.leaving || n.leaving) { h.alpha -= dt * 1.5; if (h.alpha <= 0) n.helpers.delete(h.id); continue; }
+    h.alpha = Math.min(1, h.alpha + dt * 2);
+    if (h.idx >= HELPER_MAX) continue;
+    const tg = helperTarget(n, h);
+    if (h.snap) { Object.assign(h, tg); h.snap = false; }
+    h.anim += dt;
+    if (dlg && dlg.npc === h) { h.moving = false; h.dir = faceTo(h, player); continue; }
+    const dx = tg.x - h.x, dy = tg.y - h.y, d = Math.hypot(dx, dy);
+    if (d > 1) {
+      const st = Math.min(d, 60 * dt);
+      h.x += dx / d * st; h.y += dy / d * st; h.moving = true;
+      h.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+    } else { h.moving = false; h.dir = "down"; }
+  }
+}
+const shownHelpers = n => n.helpers ? [...n.helpers.values()].filter(h => h.idx < HELPER_MAX) : [];
+function drawHelper(h, t) {
+  ctx.globalAlpha = Math.max(0, Math.min(h.alpha, h.parent.alpha));
+  const talking = dlg && dlg.npc === h, o = { dir: h.dir, anim: h.anim, moving: h.moving, talking: talking && Math.floor(t * 6) % 2 };
+  let sw = null;
+  if (!h.moving && !talking) {   // 사형 곁에서 검법 수련
+    const st = ["guard", "raise", "low"][Math.floor(((t * .5 + h.seed) % 1) * 3)];
+    o.arm = st; o.dir = "down"; sw = SWORD_DOWN[st];
+    if (h.stance !== st) {
+      if (h.stance !== undefined && st === "low") {
+        fx.push({ type: "slash", x: h.x + 2, y: h.y - 18, r: 12, a0: -2.4, a1: Math.PI / 2, ccw: true, t0: t, dur: .28 });
+        burst(h.x, h.y - 6, 3, 20);
+      }
+      h.stance = st;
+    }
+  } else h.stance = undefined;
+  drawChar(ctx, h.x, h.y, h.look, o);
+  if (sw) { const g = swordGeom(h.x, h.y, o.dir, sw); drawSword(ctx, g.X, g.Y, g.a, g.len); }
+  ctx.globalAlpha = 1;
+}
+function drawHelperLabel(h, t) {   // 이름은 탭해서 대화창으로 본다 (라벨이 겹치지 않게 아이콘만)
+  const top = worldToScreen(h.x, h.y - 31);
+  ctx.globalAlpha = Math.max(0, Math.min(h.alpha, h.parent.alpha));
+  pill(top.x, top.y - 8 + Math.sin(t * 4 + h.idx) * 1.2, "🌱", "#fde3ea", "#2b1d22", 10);
+  ctx.globalAlpha = 1;
+}
+function helperPages(h) {
+  const a = h.data, k = h.parent.kind, sx = displayName(h.parent.data), nm = helperName(a);
+  const pct = a.ctx_used != null && a.ctx_window ? Math.min(100, a.ctx_used / a.ctx_window * 100) : null;
+  const pages = [say(k, {
+    claude: `장문인을 뵙습니다! ${sx} 사형의 사제 「${nm}」입니다 🙇\n사형께서 맡기신 과제를 ${longDur(now() - a.started)}째 수련하고 있습니다.`,
+    codex: `사제 「${nm}」, 보고 올립니다.\n${sx} 사형 하명 수행 중. 경과 ${longDur(now() - a.started)}.`,
+    grok: `헉 장문인?! 저 ${sx} 사형 밑 막내 「${nm}」예요 🌱\n${longDur(now() - a.started)}째 칼질 중!` })];
+  pages.push(a.task ? say(k, { claude: `사형께서 맡기신 과제입니다:\n「${a.task}」`, codex: `하명 사항:\n「${a.task}」`, grok: `받은 미션은요~\n「${a.task}」` })
+                    : say(k, { claude: "과제 내용은 봉인되어 있어 말씀드릴 수 없습니다 (암호화) 🤫", codex: "하명 사항: 확인 불가(암호화).", grok: "미션 내용은 비밀이래요 🤐" }));
+  const acts = (a.activity || []).slice(-4);
+  if (acts.length) pages.push(say(k, { claude: "최근 펼친 초식입니다:", codex: "최근 수행 내역:", grok: "방금까지 한 거!" }) + "\n"
+    + acts.map(x => `${x.kind === "tool" ? "⚔️" : "📜"} ${x.text}${x.t ? ` (${shortDur(now() - x.t)} 전)` : ""}`).join("\n"));
+  pages.push(`🧠 심법(모델) ${a.model || "?"} · 내공(추론) ${a.effort || "?"} ${flames(a.effort)}\n`
+    + (pct != null ? `😵 기력 소모(컨텍스트) ${pct.toFixed(1)}% — ${tok(a.ctx_used)} / ${tok(a.ctx_window)}\n` : "😵 기력 소모(컨텍스트) 측정 불가\n")
+    + `⚔️ 펼친 초식 ${a.tools ?? "?"}회 · 수련 ${longDur(now() - a.started)}${a.type ? ` · 유형 ${a.type}` : ""}`);
+  return pages;
+}
+
+function updateHud() {
+  const list = [...npcs.values()].filter(n => !n.leaving).map(n => n.data);
+  $("co").textContent = `華山派 ${(host || "AI").toUpperCase()} 분타`;
+  const cost = list.reduce((a, s) => a + (s.cost_usd || 0), 0);
+  $("sC").textContent = cost ? `$${cost.toFixed(2)}` : "-";
+  $("sN").textContent = list.length;
+  $("sB").textContent = list.filter(s => mood(s) === "work").length;
+  $("sI").textContent = list.filter(s => mood(s) === "rest").length;
+  $("sS").textContent = list.filter(s => mood(s) === "sleep").length;
+}
+
+// ============================================================ 입력
+const keys = new Set();
+addEventListener("keydown", e => {
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
+  if (!$("modal").hidden) { if (e.key === "Escape") closeModal(); return; }
+  if (e.key === " " || e.key === "Enter" || e.key === "e" || e.key === "E") { interact(); return; }
+  if (e.key === "Escape") { closeDialog(); return; }
+  keys.add(e.key.toLowerCase());
+});
+addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
+addEventListener("blur", () => keys.clear());
+
+let talkTarget = null;
+cv.addEventListener("pointerdown", e => {
+  if (dlg) { advanceDialog(); return; }
+  const w = screenToWorld(e.clientX, e.clientY);
+  // 머리 위 라벨까지 포함해 제자를 탭했는지 확인
+  const labelH = 46 / view.scale;
+  let hit = null, best = 1e9;
+  for (const n of npcs.values()) {
+    if (n.leaving) continue;
+    if (Math.abs(w.x - n.x) < 12 && w.y > n.y - 30 - labelH && w.y < n.y + 3) {
+      const d = Math.abs(w.y - (n.y - 14));
+      if (d < best) { best = d; hit = n; }
+    }
+    for (const h of shownHelpers(n))   // 사제는 몸통만 (라벨이 작아서)
+      if (!h.leaving && Math.abs(w.x - h.x) < 8 && w.y > h.y - 38 && w.y < h.y + 3) {
+        const d = Math.abs(w.y - (h.y - 14)) - 4;
+        if (d < best) { best = d; hit = h; }
+      }
+  }
+  const pt = tileOf(player);
+  if (hit) {
+    talkTarget = hit;
+    if (dist(player, hit) < 24) { openDialog(hit); return; }
+    const tt = tileOf(hit);
+    player.path = findPath(pt.x, pt.y, tt.x, tt.y) || [];
+    if (!player.path.length && hit.parent) { openDialog(hit); talkTarget = null; }
+    return;
+  }
+  talkTarget = null;
+  const tx = Math.floor(w.x / T), ty = Math.floor(w.y / T);
+  if (walkable(tx, ty) && ty < H - 1) player.path = findPath(pt.x, pt.y, tx, ty) || [];
+});
+$("dlg").addEventListener("pointerdown", e => { e.stopPropagation(); advanceDialog(); });
+
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function nearestNpc(maxD = 24) {
+  let best = null, bd = maxD;
+  for (const n of npcs.values()) {
+    if (n.leaving) continue;
+    const d = dist(player, n);
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+function interact() {
+  if (dlg) { advanceDialog(); return; }
+  const n = nearestNpc();
+  if (n) openDialog(n);
+}
+
+function updatePlayer(dt) {
+  if (dlg) { player.moving = false; return; }
+  let vx = 0, vy = 0;
+  if (keys.has("arrowleft") || keys.has("a")) vx -= 1;
+  if (keys.has("arrowright") || keys.has("d")) vx += 1;
+  if (keys.has("arrowup") || keys.has("w")) vy -= 1;
+  if (keys.has("arrowdown") || keys.has("s")) vy += 1;
+  if (vx || vy) {
+    player.path = []; talkTarget = null;
+    const l = Math.hypot(vx, vy), step = player.speed * dt;
+    moveBy(player, vx / l * step, 0);
+    moveBy(player, 0, vy / l * step);
+    player.dir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : (vy > 0 ? "down" : "up");
+    player.moving = true; player.anim += dt;
+    return;
+  }
+  if (player.path.length) {
+    if (talkTarget && dist(player, talkTarget) < 22) { player.path = []; openDialog(talkTarget); talkTarget = null; return; }
+    followPath(player, dt);
+    if (!player.path.length && talkTarget && dist(player, talkTarget) < 30) { openDialog(talkTarget); talkTarget = null; }
+    return;
+  }
+  player.moving = false;
+}
+function blocked(x, y) {
+  for (const [ox, oy] of [[-4, -3], [4, -3], [-4, 0], [4, 0]]) {
+    const tx = Math.floor((x + ox) / T), ty = Math.floor((y + oy) / T);
+    if (!walkable(tx, ty) || ty >= H - 1) return true;
+  }
+  return false;
+}
+function moveBy(e, dx, dy) { if (!blocked(e.x + dx, e.y + dy)) { e.x += dx; e.y += dy; } }
+
+// ============================================================ 대화
+let dlg = null;
+function say(kind, v) { return v[kind] || v.claude; }
+function makePages(s) {
+  const k = s.kind, name = displayName(s), m = mood(s), pct = ctxPct(s);
+  const since = longDur(s.status_since ? now() - s.status_since : s.elapsed);
+  const idle = longDur(idleSecs(s));
+  const n = npcs.get(s.pid), partner = n && partnerOf(n), pn = partner ? displayName(partner.data) : "";
+  const pages = [];
+
+  let p1 = say(k, {
+    claude: `장문인을 뵙습니다! ${name}입니다. 🙇\n`,
+    codex: `${name}, 장문인께 보고 올립니다.\n`,
+    grok: `오, 장문인 어르신! ㅎㅎ ${name}이에요~\n`,
+  });
+  if (m === "work") p1 += s.phase === "shell"
+    ? say(k, { claude: `지금 내공(터미널)을 운용하며 결과를 기다리는 중입니다. (${since}째)`,
+               codex: `운공 중(셸 명령 실행). 경과 ${since}.`,
+               grok: `기 모으는 중이에요 🌀 터미널 결과 기다린 지 ${since}째!` })
+    : partner
+    ? say(k, { claude: `${pn} 사형과 대련하며 초식을 다듬고 있습니다! 이 과제를 붙잡은 지 ${since}째입니다.`,
+               codex: `대련 중(상대: ${pn}). 경과 ${since}.`,
+               grok: `${pn}이랑 한판 붙는 중이에요 🤺 ${since}째!` })
+    : say(k, { claude: `목인장을 상대로 검법을 수련하고 있습니다. 이 과제를 붙잡은 지 ${since}째입니다.`,
+               codex: `단독 수련 중. 경과 ${since}.`,
+               grok: `혼자 칼질 연습 중이에요 ⚔️🔥 ${since}째 달리는 중!` });
+  else if (m === "rest") {
+    const a = restAct(s.pid);
+    p1 += say(k, {
+      claude: `지금은 ${REST_SAY[a]} 다음 가르침을 기다리고 있습니다. ${idle}째 개인정비 중입니다.`,
+      codex: `개인정비 중(${REST_TXT[a]}). ${idle} 경과. 다음 하명 바랍니다.`,
+      grok: `${REST_SAY[a]} 쉬는 중이에요~ ${idle}째요 😌` });
+  }
+  else if (m === "sleep") p1 += say(k, {
+    claude: `…쿨… 앗, 장문인! 조, 졸던 게 아니라 깊은 명상 중이었습니다! ${idle}째 가르침이 없어서 그만…`,
+    codex: `(…) 장시간 대기. ${idle} 경과. 하명 없음.`,
+    grok: `zzZ… 헉 장문인?! ${idle}째 낮잠… 아니 폐관수련 중이었어요!` });
+  else if (m === "stopped") p1 += say(k, {
+    claude: "누군가 제 혈도를 짚었습니다… 움직일 수가 없습니다! (일시정지 — 터미널에서 풀어 주세요)",
+    codex: "점혈 상태(SIGSTOP).", grok: "얼음! 혈도 막혔어요 🧊 누가 좀 풀어줘요" });
+  else p1 += say(k, { claude: "제 수련 기록을 찾지 못하겠습니다. 수련은 하고 있는 것 같은데…", codex: "상태 기록 없음.", grok: "음… 저도 제가 뭐 하는지 모르겠어요 ㅋㅋ" });
+  if (s.mode === "headless") p1 += say(k, {
+    claude: "\n(저는 이번 일만 돕고 떠나는 객원 무사입니다!)",
+    codex: "\n※ 단발성 객원 임무(exec).", grok: "\n(전 이번 건만 하고 뜨는 낭인이에요 😎)" });
+  pages.push(p1);
+
+  const subs = helperBusy(s);
+  if (subs.length) pages.push(say(k, {
+    claude: `지금 사제 ${subs.length}명에게 과제를 나눠 맡겼습니다:`,
+    codex: `사제 ${subs.length}명 운용 중:`,
+    grok: `사제들 ${subs.length}명 굴리는 중이에요 😎` }) + "\n"
+    + subs.slice(0, 5).map(a => `🌱 ${helperName(a)} — ${a.model || "?"} · ${shortDur(now() - a.started)}째`).join("\n")
+    + (subs.length > 5 ? `\n… 외 ${subs.length - 5}명` : ""));
+
+  if (s.task) pages.push(say(k, {
+    claude: `제가 받은 수련 과제는 이것입니다:\n「${s.task}」`,
+    codex: `하명 사항:\n「${s.task}」`,
+    grok: `받은 미션은요~\n「${s.task}」` }));
+  else pages.push(say(k, {
+    claude: "이번 임무는 기록을 남기지 않는 비밀 임무라 자세히 말씀드릴 수 없습니다 🤫",
+    codex: "하명 사항: 기록 없음(ephemeral).", grok: "극비 임무라 말 못 해요 🤐 (진짜 기록이 없어요)" }));
+
+  const acts = (s.activity || []).slice(-4);
+  if (acts.length) {
+    const head = say(k, { claude: "최근 펼친 초식입니다:", codex: "최근 수행 내역:", grok: "방금까지 한 거!" });
+    const lines = acts.map(a => `${a.kind === "tool" ? "⚔️" : "📜"} ${a.text}${a.t ? ` (${shortDur(now() - a.t)} 전)` : ""}`);
+    pages.push(head + "\n" + lines.join("\n"));
+  }
+
+  let p4 = `🧠 심법(모델) ${s.model || "?"} · 내공(추론) ${s.effort || "?"} ${flames(s.effort)}\n`;
+  p4 += pct != null ? `😵 기력 소모(컨텍스트) ${pct.toFixed(1)}% — ${tok(s.ctx_used)} / ${tok(s.ctx_window)}\n` : "😵 기력 소모(컨텍스트) 측정 불가\n";
+  p4 += `⏱️ 수련 ${longDur(s.elapsed)} · CPU ${s.cpu}% · 메모리 ${(s.rss / 1048576).toFixed(0)}MB`;
+  if (s.cost_usd) p4 += ` · 💰 $${s.cost_usd.toFixed(2)}`;
+  p4 += "\n";
+  if (pct == null) p4 += "";
+  else if (pct >= 80) p4 += say(k, { claude: "기혈이 뒤엉킵니다… 이러다 주화입마하겠습니다. 정리(compact)가 필요합니다 😵‍💫", codex: "경고: 컨텍스트 여유 부족.", grok: "머리 터지기 직전이에요 🫠 곧 리셋 각!" });
+  else if (pct >= 50) p4 += say(k, { claude: "슬슬 기력이 달리기 시작합니다.", codex: "컨텍스트 절반 이상 사용.", grok: "슬슬 숨차요~" });
+  else p4 += say(k, { claude: "아직 기운이 펄펄합니다! 💪", codex: "컨텍스트 여유 충분.", grok: "아직 팔팔해요 ✌️" });
+  pages.push(p4);
+  return pages;
+}
+const tok = n => n == null ? "-" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
+
+function openDialog(n) {
+  if (n.parent) return openHelperDialog(n);
+  const s = n.data;
+  dlg = { npc: n, pages: makePages(s), page: 0, shown: 0 };
+  $("dName").textContent = displayName(s);
+  $("dKind").textContent = KIND[s.kind].label;
+  $("dKind").style.background = KIND[s.kind].color;
+  $("dRole").textContent = `${jobTitle(s)} · PID ${s.pid}${s.tty ? " · " + s.tty : ""}`;
+  const pc = $("portrait"), pctx = pc.getContext("2d");
+  pctx.clearRect(0, 0, pc.width, pc.height);
+  drawChar(pctx, 12, 33, n.look, { dir: "down", talking: true, noShadow: true });
+  $("dlg").hidden = false;
+  $("hint").hidden = true;
+  renderDialogText();
+}
+function openHelperDialog(h) {
+  const a = h.data, n = h.parent;
+  dlg = { npc: h, pages: helperPages(h), page: 0, shown: 0 };
+  $("dName").textContent = `🌱 ${helperName(a)}`;
+  $("dKind").textContent = KIND[n.kind].label;
+  $("dKind").style.background = KIND[n.kind].color;
+  $("dRole").textContent = `사제 · ${displayName(n.data)} 사형 휘하`;
+  const pc = $("portrait"), pctx = pc.getContext("2d");
+  pctx.clearRect(0, 0, pc.width, pc.height);
+  drawChar(pctx, 12, 33, h.look, { dir: "down", talking: true, noShadow: true });
+  $("dlg").hidden = false;
+  $("hint").hidden = true;
+  renderDialogText();
+}
+function renderDialogText() {
+  const full = dlg.pages[dlg.page];
+  $("dText").textContent = full.slice(0, Math.floor(dlg.shown));
+  $("dPage").textContent = `${dlg.page + 1} / ${dlg.pages.length}`;
+  $("dNext").style.visibility = dlg.shown >= full.length ? "visible" : "hidden";
+  $("dNext").textContent = dlg.page === dlg.pages.length - 1 ? "■ 닫기" : "▼ Space / 탭";
+}
+function advanceDialog() {
+  if (!dlg) return;
+  const full = dlg.pages[dlg.page];
+  if (dlg.shown < full.length) dlg.shown = full.length;
+  else if (dlg.page < dlg.pages.length - 1) { dlg.page++; dlg.shown = 0; }
+  else { closeDialog(); return; }
+  renderDialogText();
+}
+function closeDialog() { dlg = null; $("dlg").hidden = true; $("hint").hidden = false; }
+
+// ============================================================ 그리기: 캐릭터 (외곽선 도트 스프라이트, 캐시)
+function shade(hex, f) {
+  const v = parseInt(hex.slice(1), 16), ch = [v >> 16, (v >> 8) & 255, v & 255];
+  const m = c => Math.max(0, Math.min(255, Math.round(f < 1 ? c * f : c + (255 - c) * (f - 1))));
+  return "#" + ch.map(c => m(c).toString(16).padStart(2, "0")).join("");
+}
+// 16x28 박스 기준(발끝이 27행). 캔버스 여백 8px(좌우)·10px(위)
+function paintChar(g, L, p) {
+  const P = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x + 8, y + 10, w, h); };
+  const sit = p.body === "sit", by = sit ? 4 : 0, hy = by + (p.nod ? 1 : 0);
+  const B = (x, y, w, h, col) => P(x, y + by, w, h, col);
+  const Hd = (x, y, w, h, col) => P(x, y + hy, w, h, col);
+  const side = p.dir === "right", up = p.dir === "up";
+  const skin = L.skin, skinS = shade(skin, .85), hair = L.hair, hairH = shade(hair, 1.35), band = L.band;
+  const robe = L.robe, robeS = L.robeS, trim = L.trim;
+
+  // ---- 하체
+  if (sit) {   // 가부좌
+    P(1, 22, 14, 3, robe); P(1, 24, 14, 1, robeS); P(0, 23, 1, 2, robeS); P(15, 23, 1, 2, robeS);
+    P(2, 25, 12, 2, C.pants); P(1, 25, 2, 2, C.shoe); P(13, 25, 2, 2, C.shoe);
+  } else {
+    const a = p.leg === 1 ? 1 : 0, b = p.leg === 2 ? 1 : 0;
+    if (side) {
+      P(5, 24 - a, 3, 2, C.pants); P(8, 24 - b, 3, 2, C.pants); P(5, 26 - a, 3, 2, C.shoe); P(8, 26 - b, 4, 2, C.shoe);
+      P(4, 19, 8, 4, robe); P(3, 21, 10, 3, robe); P(3, 23, 10, 1, robeS); P(4, 19, 1, 4, robeS); P(8, 20, 1, 3, robeS);
+    } else {
+      P(4, 24 - a, 3, 2, C.pants); P(9, 24 - b, 3, 2, C.pants); P(4, 26 - a, 3, 2, C.shoe); P(9, 26 - b, 3, 2, C.shoe);
+      P(3, 19, 10, 4, robe); P(2, 21, 12, 3, robe); P(2, 23, 12, 1, robeS); P(7, 20, 1, 3, robeS); P(2, 21, 1, 2, robeS);
+    }
+  }
+  // ---- 몸통
+  const tx = side ? 4 : 3, tw = side ? 8 : 10;
+  B(tx, 12, tw, 7, robe); B(tx, 12, 1, 7, robeS); if (!side) B(12, 12, 1, 7, robeS);
+  if (up) {                                   // 등판의 매화 문양
+    B(6, 12, 1, 1, C.red); B(8, 12, 1, 1, C.red); B(5, 13, 5, 1, C.red); B(6, 14, 3, 1, C.red); B(7, 14, 1, 1, C.gold);
+    B(5, 15, 5, 1, C.red); B(6, 16, 1, 1, C.red); B(8, 16, 1, 1, C.red);
+  } else if (side) {
+    B(9, 12, 2, 1, trim); B(10, 13, 1, 2, trim); B(11, 15, 1, 2, trim);
+    if (L.inner) B(11, 12, 1, 1, L.inner);
+  } else {                                    // 교차 깃 + 가슴 매화
+    if (L.inner) B(6, 12, 4, 1, L.inner);
+    B(5, 12, 2, 1, trim); for (let i = 0; i < 5; i++) B(10 - i, 12 + i, 2, 1, trim);
+    B(5, 13, 1, 1, C.red); B(4, 14, 1, 1, C.red); B(6, 14, 1, 1, C.red); B(5, 15, 1, 1, C.red); B(5, 14, 1, 1, C.gold);
+  }
+  B(tx, 17, tw, 2, C.belt); B(tx, 17, tw, 1, C.beltH);
+  if (!sit && !up) B(side ? 10 : 9, 19, 1, 2, band);           // 허리 매듭(계파 색)
+  if (side && !sit && (p.arm || "idle") === "idle") { B(0, 19, 4, 1, C.scab); B(-1, 20, 2, 1, C.scab); B(11, 16, 2, 1, C.scab); }
+  // ---- 팔
+  const sleeve = (x, y, w, h) => { B(x, y, w, h, robe); B(x, y + h - 1, w, 1, robeS); };
+  const arm = up ? "idle" : p.arm || "idle";
+  if (side) {
+    if (arm === "guard") { sleeve(7, 13, 3, 3); sleeve(9, 14, 3, 2); B(12, 14, 1, 2, C.wrap); B(13, 14, 2, 2, skin); }
+    else if (arm === "strike") { sleeve(7, 13, 3, 2); sleeve(9, 13, 4, 2); B(13, 13, 1, 2, C.wrap); B(14, 13, 2, 2, skin); }
+    else if (arm === "raise") { sleeve(6, 9, 3, 5); B(6, 8, 3, 1, C.wrap); B(6, 6, 3, 2, skin); }
+    else { sleeve(6, 13, 3, 6); B(8, 13, 1, 5, robeS); B(6, 19, 3, 1, C.wrap); B(7, 20, 2, 1, skin); }
+  } else {
+    const left = () => { sleeve(1, 13, 2, 6); B(1, 19, 2, 1, C.wrap); B(1, 20, 2, 1, skin); };
+    const right = () => { sleeve(13, 13, 2, 6); B(13, 19, 2, 1, C.wrap); B(13, 20, 2, 1, skin); };
+    switch (arm) {
+      case "guard": left(); sleeve(13, 12, 2, 4); sleeve(12, 15, 2, 2); B(11, 16, 2, 1, skin); break;
+      case "raise": left(); sleeve(13, 7, 2, 6); B(13, 6, 2, 1, C.wrap); B(13, 5, 2, 1, skin); break;
+      case "low": sleeve(1, 13, 2, 4); sleeve(13, 13, 2, 4); sleeve(3, 17, 3, 2); sleeve(10, 17, 3, 2); B(6, 18, 4, 2, skin); break;
+      case "up2": sleeve(1, 6, 2, 7); sleeve(13, 6, 2, 7); B(1, 5, 2, 1, C.wrap); B(13, 5, 2, 1, C.wrap); B(2, 3, 2, 2, skin); B(12, 3, 2, 2, skin); break;
+      case "meditate": sleeve(1, 13, 2, 4); sleeve(13, 13, 2, 4); sleeve(2, 17, 4, 2); sleeve(10, 17, 4, 2); B(6, 18, 4, 1, skin); break;
+      case "tea":
+        sleeve(1, 13, 2, 4); sleeve(2, 17, 4, 2); B(6, 18, 2, 1, skin);
+        sleeve(13, 13, 2, 3); sleeve(11, 15, 3, 2); B(10, 15, 2, 2, skin);
+        B(8, 13, 3, 3, C.cel); B(8, 13, 3, 1, "#e0f2ea"); B(8, 15, 3, 1, shade(C.cel, .75)); break;
+      case "polish":
+        sleeve(1, 13, 2, 5); sleeve(13, 13, 2, 5);
+        B(-1, 19, 13, 1, C.steel); B(-1, 20, 13, 1, C.steelS); B(12, 18, 1, 3, C.gold); B(13, 19, 3, 1, C.scab); B(16, 19, 1, 3, C.red);
+        B(3, 18, 3, 2, "#fdfaf2"); B(10, 18, 2, 2, skin); break;
+      case "read":
+        sleeve(1, 13, 2, 3); sleeve(13, 13, 2, 3);
+        B(2, 15, 12, 5, C.scroll); B(1, 14, 1, 7, C.wood); B(14, 14, 1, 7, C.wood);
+        B(4, 16, 8, 1, "#9a8a6a"); B(4, 18, 6, 1, "#9a8a6a"); break;
+      default: left(); right();
+    }
+  }
+  // ---- 머리
+  if (side) {
+    Hd(5, 3, 7, 1, skin); Hd(4, 4, 9, 7, skin); Hd(5, 11, 7, 1, skin); Hd(13, 7, 1, 1, skin);
+    Hd(4, 1, 8, 1, hair); Hd(3, 2, 10, 3, hair); Hd(3, 5, 4, 5, hair); Hd(4, 10, 2, 1, hair); Hd(10, 5, 3, 1, hair);
+    Hd(6, 2, 3, 1, hairH); Hd(7, 7, 1, 2, skinS);
+    if (p.closed) Hd(10, 8, 2, 1, C.eye); else Hd(10, 7, 1, 2, C.eye);
+    Hd(11, 9, 1, 1, C.blush);
+    if (p.talk) Hd(11, 10, 1, 1, "#a33d3d");
+  } else if (up) {
+    Hd(4, 1, 8, 1, hair); Hd(3, 2, 10, 9, hair); Hd(4, 11, 8, 1, hair); Hd(5, 3, 4, 1, hairH);
+    Hd(2, 6, 1, 2, skin); Hd(13, 6, 1, 2, skin);
+  } else {
+    Hd(4, 3, 8, 1, skin); Hd(3, 4, 10, 7, skin); Hd(4, 11, 8, 1, skin);
+    Hd(4, 1, 8, 1, hair); Hd(3, 2, 10, 3, hair); Hd(2, 3, 1, 6, hair); Hd(13, 3, 1, 6, hair);
+    Hd(3, 5, 2, 1, hair); Hd(6, 5, 4, 1, hair); Hd(11, 5, 2, 1, hair); Hd(3, 6, 1, 1, hair); Hd(12, 6, 1, 1, hair);
+    Hd(5, 2, 3, 1, hairH);
+    if (p.closed) { Hd(4, 8, 2, 1, C.eye); Hd(10, 8, 2, 1, C.eye); }
+    else { Hd(5, 7, 1, 2, C.eye); Hd(10, 7, 1, 2, C.eye); }
+    Hd(4, 9, 1, 1, C.blush); Hd(11, 9, 1, 1, C.blush);
+    if (p.talk) Hd(7, 10, 2, 1, "#a33d3d");
+  }
+  // 머리 모양: 0 상투, 1 높은 꽁지머리, 2 긴 머리+머리띠, 3 짧은 머리+머리띠, 4 반묶음 긴 머리
+  const st = L.style;
+  if (st === 0 || st === 4) { Hd(6, -1, 4, 3, hair); Hd(7, -2, 2, 1, hair); Hd(7, -1, 1, 1, hairH); Hd(6, 1, 4, 1, band); }
+  if (st === 1) {
+    Hd(6, 0, 4, 2, hair); Hd(6, 1, 4, 1, band);
+    if (side) { Hd(1, 2, 3, 2, hair); Hd(0, 4, 3, 7, hair); Hd(1, 11, 2, 2, hair); }
+    else if (up) Hd(6, 11, 4, 6, hair);
+  }
+  if (st === 2 || st === 4) {
+    if (side) { Hd(2, 4, 3, 10, hair); Hd(3, 14, 2, 1, hair); }
+    else if (up) { Hd(3, 11, 10, 5, hair); Hd(4, 16, 8, 1, hair); }
+    else { Hd(2, 6, 2, 8, hair); Hd(12, 6, 2, 8, hair); }
+  }
+  if (st === 2 || st === 3) {
+    if (side) { Hd(4, 4, 9, 1, band); Hd(1, 4, 3, 1, band); Hd(0, 5, 2, 2, band); }
+    else if (up) { Hd(3, 4, 10, 1, band); Hd(6, 5, 2, 4, band); Hd(8, 5, 2, 3, band); }
+    else Hd(3, 4, 10, 1, band);
+  }
+  if (st === 3) { Hd(3, 0, 2, 2, hair); Hd(7, -1, 2, 2, hair); Hd(11, 0, 2, 2, hair); }
+  // 모자
+  if (L.hat === "master") {   // 장문인의 관
+    Hd(5, -2, 6, 3, "#1c1a1e"); Hd(4, 0, 8, 2, "#1c1a1e"); Hd(6, -1, 4, 1, "#3a3540");
+    Hd(2, -1, 12, 1, C.gold); Hd(7, -3, 2, 1, "#7fd1b0");
+  }
+  if (L.hat === "straw") {    // 객원 무사의 삿갓
+    Hd(-1, 3, 18, 1, C.strawS); Hd(-1, 2, 18, 1, C.straw); Hd(1, 1, 14, 1, C.straw); Hd(3, 0, 10, 1, C.straw);
+    Hd(5, -1, 6, 1, C.straw); Hd(7, -2, 2, 1, C.strawS); Hd(4, 1, 1, 1, C.strawS); Hd(10, 0, 1, 1, C.strawS);
+  }
+}
+const sprCache = new Map();
+function getSprite(L, p) {
+  const key = `${L.id}|${p.dir}|${p.body}|${p.arm}|${p.leg}|${+p.closed}${+p.nod}${+p.talk}`;
+  let out = sprCache.get(key);
+  if (out) return out;
+  if (sprCache.size > 3000) sprCache.clear();
+  const mk = () => { const c = document.createElement("canvas"); c.width = 32; c.height = 44; return c; };
+  const base = mk(), bg = base.getContext("2d");
+  if (p.dir === "left") { bg.translate(32, 0); bg.scale(-1, 1); paintChar(bg, L, { ...p, dir: "right" }); }
+  else paintChar(bg, L, p);
+  const sil = mk(), sg = sil.getContext("2d");
+  sg.drawImage(base, 0, 0); sg.globalCompositeOperation = "source-in"; sg.fillStyle = C.OL; sg.fillRect(0, 0, 32, 44);
+  out = mk(); const og = out.getContext("2d");
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) og.drawImage(sil, dx, dy);
+  og.drawImage(base, 0, 0);
+  sprCache.set(key, out);
+  return out;
+}
+function drawChar(c, x, y, L, o = {}) {
+  const body = o.body || "stand", arm = o.arm || "idle";
+  const leg = o.moving && body === "stand" && arm === "idle" ? 1 + (Math.floor((o.anim || 0) * 8) % 2) : 0;
+  const pose = { dir: o.dir || "down", body, arm, leg, closed: !!o.closed, nod: !!o.nod, talk: !!o.talking };
+  if (pose.body === "sit") pose.dir = "down";
+  if (!o.noShadow) {
+    c.fillStyle = "rgba(40,20,20,.22)"; c.beginPath(); c.ellipse(Math.round(x), Math.round(y), body === "sit" ? 9 : 6, 2, 0, 0, 7); c.fill();
+  }
+  c.drawImage(getSprite(L, pose), Math.round(x) - 16, Math.round(y) - 38);
+}
+
+// ---- 검 (손 위치·각도는 스프라이트 박스 좌표 기준)
+const SWORD_DOWN = { guard: { hx: 12, hy: 16, a: -1.1, len: 10 }, raise: { hx: 14, hy: 5, a: -2.4, len: 11 }, low: { hx: 8, hy: 19, a: Math.PI / 2, len: 8 } };
+const SWORD_SIDE = { guard: { hx: 14, hy: 15, a: -0.5, len: 10 }, strike: { hx: 15, hy: 14, a: 0, len: 13 }, raise: { hx: 7, hy: 7, a: -2.3, len: 11 } };
+function swordGeom(x, y, dir, sw) {
+  let hx = sw.hx, a = sw.a;
+  if (dir === "left") { hx = 15 - hx; a = Math.PI - a; }
+  const X = Math.round(x) - 8 + hx + .5, Y = Math.round(y) - 28 + sw.hy + .5;
+  return { X, Y, a, len: sw.len, tipX: X + Math.cos(a) * sw.len, tipY: Y + Math.sin(a) * sw.len };
+}
+function drawSword(g, X, Y, a, len) {
+  const dx = Math.cos(a), dy = Math.sin(a);
+  const d = (i, j, col) => { g.fillStyle = col; g.fillRect(Math.floor(X + dx * i - dy * j), Math.floor(Y + dy * i + dx * j), 1, 1); };
+  d(-1, 0, C.scab); d(-2, 0, C.scab); d(-3, 0, C.red); d(-3, 1, C.red); d(-4, 1, "#e9768c");
+  d(1, -1, C.gold); d(1, 0, C.gold); d(1, 1, C.gold);
+  for (let i = 2; i <= len; i++) { if (i < len) d(i, 1, C.steelS); d(i, 0, i === len ? "#ffffff" : C.steel); }
+}
+
+// ============================================================ 효과: 매화 꽃잎·검광·불꽃
+const petals = [], fx = [];
+const PETAL_COL = ["#f7b8c8", "#fde3ea", "#ee8fa8", "#ffffff", "#f4a0b5"];
+function addPetal(x, y, vx, vy, life, grav = 0) {
+  if (petals.length > 260) petals.shift();
+  petals.push({ x, y, vx, vy, life, grav, s: Math.random() * 6, c: PETAL_COL[Math.floor(Math.random() * PETAL_COL.length)] });
+}
+function burst(x, y, n, spd = 30) {
+  for (let i = 0; i < n; i++) addPetal(x, y, (Math.random() - .5) * spd * 2, -Math.random() * spd, 1.2 + Math.random(), 40);
+}
+function updateFx(dt, t) {
+  // 매화나무에서 꽃잎이 흩날린다
+  for (const d of deco) if (d.t === "plum" && Math.random() < dt * 1.6)
+    addPetal(d.x * T + 8 + (Math.random() - .5) * 30, d.y * T - 22 + (Math.random() - .5) * 16, (Math.random() - .3) * 8, 6 + Math.random() * 6, 5 + Math.random() * 3);
+  for (let i = petals.length - 1; i >= 0; i--) {
+    const p = petals[i];
+    p.life -= dt;
+    if (p.life <= 0 || p.y > H * T) { petals.splice(i, 1); continue; }
+    if (p.grav) p.vy = Math.min(14, p.vy + p.grav * dt);
+    p.x += (p.vx + Math.sin(t * 2 + p.s) * 7) * dt; p.y += p.vy * dt;
+    p.vx *= 1 - dt * .8;
+  }
+  for (let i = fx.length - 1; i >= 0; i--) if (t - fx[i].t0 > fx[i].dur) fx.splice(i, 1);
+}
+function drawPetals(t) {
+  for (const p of petals) {
+    ctx.globalAlpha = Math.min(1, p.life);
+    ctx.fillStyle = p.c;
+    if (Math.floor(t * 5 + p.s) % 2) ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 1);
+    else ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 2);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawFx(t) {
+  for (const f of fx) {
+    const k = (t - f.t0) / f.dur, a = 1 - k;
+    if (f.type === "slash") {
+      ctx.lineCap = "round";
+      ctx.strokeStyle = `rgba(255,170,195,${.75 * a})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, f.a0, f.a1, f.ccw); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${.9 * a})`; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, f.a0, f.a1, f.ccw); ctx.stroke();
+    } else if (f.type === "spark") {
+      const r = 2 + k * 5;
+      ctx.fillStyle = `rgba(255,236,150,${a})`;
+      for (let i = 0; i < 8; i++) { const an = i * Math.PI / 4; ctx.fillRect(Math.round(f.x + Math.cos(an) * r), Math.round(f.y + Math.sin(an) * r), 1, 1); }
+      ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fillRect(Math.round(f.x) - 1, Math.round(f.y) - 1, 2, 2);
+    }
+  }
+  ctx.lineWidth = 1;
+}
+
+// ============================================================ 그리기: 화산 (정적 배경은 캐시)
+function px(x, y, w, h, col) { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); }
+function skyColor(h) {
+  if (h >= 7 && h < 17) return ["#7fc0ef", "#d4ecfb"];
+  if (h >= 17 && h < 19) return ["#f19a6b", "#fbd9a6"];
+  if (h >= 5 && h < 7) return ["#f0b2c8", "#d4ecfb"];
+  return ["#141c38", "#2b3963"];
+}
+const isNight = h => h < 5 || h >= 19;
+function plumMark(g, x, y, r, col = "#d6405f", core = "#f5c542") {
+  g.fillStyle = col;
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + i * Math.PI * 2 / 5;
+    g.beginPath(); g.arc(x + Math.cos(a) * r * .52, y + Math.sin(a) * r * .52, r * .46, 0, 7); g.fill();
+  }
+  g.fillStyle = core; g.beginPath(); g.arc(x, y, r * .3, 0, 7); g.fill();
+}
+let bgCache = null, bgKey = "";
+function background() {
+  const hr = new Date().getHours(), key = `${W}x${H}|${skyColor(hr)[0]}`;
+  if (key !== bgKey) {
+    bgKey = key;
+    bgCache = document.createElement("canvas");
+    bgCache.width = W * T; bgCache.height = H * T + SKY;
+    const g = bgCache.getContext("2d");
+    g.translate(0, SKY);
+    paintBG(g, hr);
+  }
+  return bgCache;
+}
+const HALL = { x0: 5 * T, x1: 22 * T };
+function paintBG(g, hr) {
+  const P = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+  const WW = W * T, night = isNight(hr), dim = c => night ? shade(c, .5) : c;
+  // 하늘
+  const [s1, s2] = skyColor(hr);
+  const sg = g.createLinearGradient(0, -SKY, 0, 44); sg.addColorStop(0, s1); sg.addColorStop(1, s2);
+  g.fillStyle = sg; g.fillRect(0, -SKY, WW, SKY + 44);
+  if (night) {
+    for (let i = 0; i < 70; i++) P(hash("s" + i) % WW, -SKY + hash("t" + i) % (SKY + 24), 1, 1, i % 7 ? "#dfe6ff" : "#fff6c8");
+    g.fillStyle = "#fbf3cf"; g.beginPath(); g.arc(WW - 40, 10, 7, 0, 7); g.fill();
+    g.fillStyle = s1; g.beginPath(); g.arc(WW - 37, 8, 6, 0, 7); g.fill();
+  } else {
+    for (const [cx, cy, w] of [[40, 6, 34], [200, -6, 44], [330, 10, 30], [120, -30, 40], [380, -24, 36]]) {
+      P(cx, cy, w, 4, "#ffffff"); P(cx + 5, cy - 3, w - 14, 3, "#ffffff"); P(cx + 3, cy + 4, w - 6, 1, "#e3f1fb");
+    }
+  }
+  // 화산의 화강암 봉우리 (먼 것 → 가까운 것)
+  const ridge = (peaks, slope, col, colH, stripes) => {
+    for (let x = 0; x < WW; x += 2) {
+      let top = 44;
+      for (const [pxp, h] of peaks) top = Math.min(top, 44 - h + Math.abs(x - pxp) * slope + hash(x * 3 + pxp) % 3);
+      top = Math.round(top);
+      P(x, top, 2, 48 - top, col);
+      if (stripes && (x / 2) % 3 === 0) P(x, top + 4, 1, 40 - top, colH);
+      P(x, top, 2, 1, colH);
+    }
+  };
+  ridge([[1 * T, 30], [4 * T, 40], [9 * T, 36], [13.5 * T, 46], [18 * T, 38], [23 * T, 42], [26 * T, 30]], 1.4, dim("#a9b6c6"), dim("#cbd5df"), true);
+  g.fillStyle = night ? "rgba(200,210,240,.08)" : "rgba(255,255,255,.35)"; g.fillRect(0, 24, WW, 6);
+  ridge([[0, 16], [3 * T, 22], [8 * T, 15], [14 * T, 20], [20 * T, 24], [25 * T, 17]], .55, dim("#6f8d7b"), dim("#86a490"), false);
+  for (let x = 6; x < WW; x += 11) { const h2 = hash("pine" + x); P(x + h2 % 5, 26 + h2 % 6, 2, 4, dim("#4d6b58")); P(x + h2 % 5 - 1, 28 + h2 % 6, 4, 2, dim("#4d6b58")); }
+  // 담장 (기와 지붕 + 흰 벽)
+  P(0, 33, WW, 1, dim("#76878a")); P(0, 34, WW, 4, dim("#4d5c5b"));
+  for (let x = 0; x < WW; x += 4) P(x, 37, 2, 1, dim("#3a4645"));
+  P(0, 38, WW, 26, dim("#efe9dc")); P(0, 38, WW, 2, dim("#d6cfbf")); P(0, 59, WW, 5, dim("#b9b2a2"));
+  for (const wx of [2.5 * T, 24.5 * T]) {      // 둥근 창
+    g.fillStyle = dim("#5d4b44"); g.beginPath(); g.arc(wx, 48, 7, 0, 7); g.fill();
+    g.fillStyle = dim("#8c6a4c"); g.beginPath(); g.arc(wx, 48, 5.5, 0, 7); g.fill();
+    P(wx - 5, 47, 10, 1, dim("#5d4b44")); P(wx - 1, 43, 1, 10, dim("#5d4b44"));
+  }
+  // 담 너머 매화
+  for (const [bx, by] of [[1.6 * T, 26], [25.2 * T, 28]]) for (let i = 0; i < 46; i++) {
+    const h2 = hash(`w${bx}${i}`), a = (h2 % 628) / 100, r = (h2 >> 10) % 14;
+    P(Math.round(bx + Math.cos(a) * r * 1.3), Math.round(by + Math.sin(a) * r * .7), 2, 2, dim(PETAL_COL[(h2 >> 4) % 5]));
+  }
+  // ---- 본전
+  const X0 = HALL.x0, X1 = HALL.x1, CX = (X0 + X1) / 2;
+  P(X0 - 6, 54, X1 - X0 + 12, 10, dim("#ddd7ca")); P(X0 - 6, 54, X1 - X0 + 12, 1, dim("#f4f1ea")); P(X0 - 6, 63, X1 - X0 + 12, 1, dim("#a9a293"));
+  for (let i = 0; i < 5; i++) P(CX - 24 - i * 2, 54 + i * 2, 48 + i * 4, 2, dim(i % 2 ? "#ebe6db" : "#cfc8ba"));
+  P(X0, 28, X1 - X0, 26, dim("#5a231d"));
+  const bays = 8, bw = (X1 - X0) / bays;
+  for (let i = 0; i < bays; i++) {
+    const bx = Math.round(X0 + i * bw);
+    P(bx + 4, 33, bw - 8, 20, dim("#c08850"));
+    for (let yy = 35; yy < 52; yy += 3) P(bx + 5, yy, bw - 10, 1, dim("#8f5f32"));
+    for (let xx = bx + 6; xx < bx + bw - 5; xx += 4) P(xx, 34, 1, 18, dim("#8f5f32"));
+    P(bx + 4, 52, bw - 8, 1, dim("#6e4424"));
+  }
+  for (let i = 0; i <= bays; i++) {
+    const x = Math.round(X0 + i * bw) - 2;
+    P(x, 28, 4, 26, dim("#b3332b")); P(x, 28, 1, 26, dim("#d0503f")); P(x + 3, 28, 1, 26, dim("#7c2019")); P(x - 1, 52, 6, 2, dim("#cfc8ba"));
+  }
+  P(X0 - 4, 23, X1 - X0 + 8, 6, dim("#a52f28")); P(X0 - 4, 24, X1 - X0 + 8, 3, dim("#3f8f84"));
+  for (let x = X0; x < X1; x += 6) { P(x, 24, 2, 3, dim("#e8c35a")); P(x + 3, 25, 1, 1, dim("#f2efe6")); }
+  P(X0 - 4, 28, X1 - X0 + 8, 1, dim("#6e1f1a"));
+  // 지붕 (청록 기와, 처마 들림)
+  for (let y = 4; y <= 21; y++) {
+    const k = (y - 4) / 17, l = Math.round(X0 + 22 - k * 34), r = Math.round(X1 - 22 + k * 34);
+    P(l, y, r - l, 1, dim(y % 3 ? "#3d6f69" : "#2f5853"));
+    for (let x = l + (y % 2) * 2; x < r; x += 4) P(x, y, 1, 1, dim("#294c48"));
+  }
+  P(X0 - 12, 20, X1 - X0 + 24, 3, dim("#24423f")); for (let x = X0 - 11; x < X1 + 11; x += 4) P(x, 21, 2, 2, dim("#d5dcd8"));
+  P(X0 - 18, 17, 8, 4, dim("#2f5853")); P(X0 - 21, 14, 4, 4, dim("#2f5853")); P(X0 - 22, 12, 2, 3, dim("#24423f"));
+  P(X1 + 10, 17, 8, 4, dim("#2f5853")); P(X1 + 17, 14, 4, 4, dim("#2f5853")); P(X1 + 20, 12, 2, 3, dim("#24423f"));
+  P(X0 + 20, 2, X1 - X0 - 40, 3, dim("#1f3a37")); P(X0 + 15, -1, 6, 6, dim("#1f3a37")); P(X1 - 21, -1, 6, 6, dim("#1f3a37"));
+  P(X0 + 13, -3, 3, 3, dim("#1f3a37")); P(X1 - 16, -3, 3, 3, dim("#1f3a37"));
+  // 현판 바탕 (글씨는 매 프레임 선명하게 그린다)
+  P(CX - 30, 26, 60, 14, dim("#d9b44a")); P(CX - 28, 28, 56, 10, dim("#1f2f3a"));
+  // 매화 깃발
+  for (const fx0 of [Math.round(X0 + 2 * bw) - 6, Math.round(X1 - 2 * bw) - 6]) {
+    P(fx0, 31, 12, 20, dim("#f7f3ec")); P(fx0, 31, 12, 2, dim("#b4475f")); P(fx0, 49, 12, 2, dim("#b4475f"));
+    plumMark(g, fx0 + 6, 40.5, 6.5, dim("#d6405f"), dim("#f5c542"));
+  }
+  // 처마 등롱
+  for (const lx of [X0 + 3, X1 - 3]) { P(lx, 23, 1, 6, "#3a2a22"); P(lx - 3, 29, 7, 9, dim("#d8483a")); P(lx - 3, 29, 7, 1, dim(C.gold)); P(lx - 3, 37, 7, 1, dim(C.gold)); P(lx - 1, 31, 1, 5, dim("#f07a5a")); }
+  // ---- 바닥: 왼쪽 연무장(석판), 오른쪽 정원(잔디)
+  for (let y = TOPR; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const X = x * T, Y = y * T, hv = hash(x * 131 + y * 7);
+    if (x >= 19) {
+      P(X, Y, T, T, (x + y) % 2 ? "#9cc283" : "#97bd7d");
+      for (let i = 0; i < 3; i++) { const h2 = hash(hv + i); P(X + h2 % 15, Y + (h2 >> 4) % 14, 1, 2, "#7fa86a"); }
+      if (hv % 3 === 0) P(X + (hv >> 8) % 14, Y + (hv >> 12) % 14, 2, 1, "#f5b9c8");
+      continue;
+    }
+    P(X, Y, T, T, ["#dcd6c8", "#d6cfbf", "#e0dacd", "#d1cabb"][hv % 4]);
+    P(X, Y + T - 1, T, 1, "#bdb5a5");
+    P(X + (y % 2) * 8, Y, 1, T - 1, "#bdb5a5");
+    if (hv % 11 === 0) P(X + 3 + hv % 8, Y + 5, 3, 1, "#c3bbab");
+    if (hv % 17 === 0) P(X + 2 + (hv >> 3) % 10, Y + 9, 2, 2, "#a9b68e");
+    if (hv % 9 === 0) P(X + (hv >> 6) % 14, Y + (hv >> 9) % 14, 2, 1, "#f5b9c8");
+  }
+  for (let y = TOPR; y < H - 1; y++) { P(19 * T - 2, y * T, 3, T, "#b3ab9a"); P(19 * T - 2, y * T + 15, 3, 1, "#968e7e"); }
+  // 수련 자리 표식
+  for (const s of slots) {
+    const cx = (s.dx + 1) * T, cy = s.seatY * T + 10;
+    g.fillStyle = "rgba(180,71,95,.07)"; g.beginPath(); g.ellipse(cx, cy, 12, 5, 0, 0, 7); g.fill();
+    g.strokeStyle = "#c2b9a7"; g.lineWidth = 1; g.beginPath(); g.ellipse(cx, cy, 12, 5, 0, 0, 7); g.stroke();
+  }
+  // 장문인 단상
+  P(T + 2, (H - 4) * T - 6, 5 * T - 4, 3 * T + 4, "#8a5a3a");
+  for (let y = (H - 4) * T - 2; y < (H - 1) * T; y += 5) P(T + 2, y, 5 * T - 4, 1, "#74482b");
+  P(T + 2, (H - 1) * T - 3, 5 * T - 4, 3, "#5e3b22");
+  P(T + 6, (H - 4) * T - 2, 5 * T - 12, 3 * T - 6, "#9c2f45"); P(T + 8, (H - 4) * T, 5 * T - 16, 3 * T - 10, "#a8384f");
+  g.strokeStyle = C.gold; g.strokeRect(T + 8.5, (H - 4) * T + .5, 5 * T - 17, 3 * T - 11);
+  P(3.5 * T - 7, (H - 4) * T + 2, 14, 10, "#d9b44a"); P(3.5 * T - 7, (H - 4) * T + 10, 14, 2, "#b08a35");
+  // 바깥 담 (좌우·아래) + 산문
+  for (const x0 of [0, (W - 1) * T]) {
+    P(x0, TOPR * T, T, (H - TOPR) * T, "#5d6b6a");
+    for (let y = TOPR * T; y < H * T; y += 4) P(x0 + 2, y, T - 4, 1, "#4a5756");
+    P(x0 + 7, TOPR * T, 2, (H - TOPR) * T, "#76878a");
+  }
+  const by = (H - 1) * T;
+  P(0, by, WW, T, "#efe9dc"); P(0, by, WW, 6, "#5d6b6a"); P(0, by + 5, WW, 1, "#3a4645");
+  for (let x = 0; x < WW; x += 4) P(x, by + 1, 2, 1, "#76878a");
+  P(DOOR_X * T, by, 2 * T, T, "#cfc8ba"); P(DOOR_X * T, by + 4, 2 * T, 1, "#b9b2a2");
+  for (const gx of [DOOR_X * T - 4, (DOOR_X + 2) * T]) { P(gx, by - 10, 4, 26, "#b3332b"); P(gx, by - 10, 1, 26, "#d0503f"); }
+  P(DOOR_X * T - 10, by - 16, 2 * T + 20, 6, "#2f5853"); P(DOOR_X * T - 12, by - 18, 4, 3, "#2f5853"); P((DOOR_X + 2) * T + 8, by - 18, 4, 3, "#2f5853");
+  for (let x = DOOR_X * T - 9; x < (DOOR_X + 2) * T + 9; x += 4) P(x, by - 11, 2, 1, "#d5dcd8");
+}
+
+function drawDummy(s, owner, t) {
+  const cx = (s.dx + 1) * T, base = s.deskY * T + 12;
+  const age = t - s.hitT, wob = age < .4 ? Math.sin(age * 40) * (1 - age / .4) * 2 : 0;
+  px(cx - 6, base - 2, 12, 4, "#8f877a"); px(cx - 6, base - 2, 12, 1, "#aaa294");
+  const X = Math.round(cx - 3 + wob);
+  px(X, base - 20, 6, 18, "#8a5a36"); px(X, base - 20, 2, 18, "#a36c42"); px(X + 5, base - 20, 1, 18, "#6b4428");
+  px(X - 1, base - 22, 8, 2, "#6b4428");
+  px(X, base - 14, 6, 2, "#d9c27a"); px(X, base - 8, 6, 2, "#d9c27a");
+  px(X - 4, base - 17, 4, 2, "#7a4e2e"); px(X + 6, base - 13, 4, 2, "#7a4e2e"); px(X + 2, base - 6, 2, 3, "#7a4e2e");
+  if (owner) px(X + 1, base - 19, 4, 1, KIND[owner.kind].color);
+}
+
+let treeSpr = null;
+function plumTree() {
+  if (treeSpr) return treeSpr;
+  treeSpr = document.createElement("canvas"); treeSpr.width = 48; treeSpr.height = 56;
+  const g = treeSpr.getContext("2d"), P = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+  const line = (x0, y0, x1, y1, w, c) => { const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)); for (let i = 0; i <= n; i++) P(Math.round(x0 + (x1 - x0) * i / n), Math.round(y0 + (y1 - y0) * i / n), w, w, c); };
+  P(21, 30, 6, 22, "#4a2f27"); P(20, 44, 2, 8, "#4a2f27"); P(27, 46, 2, 6, "#4a2f27"); P(23, 30, 1, 20, "#6a4636"); P(25, 36, 3, 3, "#3a231d");
+  line(23, 32, 9, 18, 2, "#4a2f27"); line(25, 30, 39, 14, 2, "#4a2f27"); line(24, 30, 25, 8, 2, "#4a2f27"); line(30, 24, 43, 27, 1, "#4a2f27"); line(15, 24, 5, 28, 1, "#4a2f27");
+  for (let i = 0; i < 110; i++) {
+    const h2 = hash("tree" + i), a = (h2 % 628) / 100, r = Math.sqrt(((h2 >> 9) % 1000) / 1000);
+    const x = Math.round(24 + Math.cos(a) * r * 21), y = Math.round(19 + Math.sin(a) * r * 15);
+    const col = PETAL_COL[(h2 >> 4) % 5];
+    P(x, y, 2, 2, col);
+    if ((h2 >> 13) % 5 === 0) { P(x - 1, y, 1, 1, col); P(x + 2, y + 1, 1, 1, col); P(x, y, 1, 1, "#d85a7a"); }
+  }
+  return treeSpr;
+}
+
+function drawDeco(d, t, night) {
+  const X = d.x * T, Y = d.y * T;
+  switch (d.t) {
+    case "plum": ctx.drawImage(plumTree(), X + 8 - 24, Y + 15 - 52); break;
+    case "rack":
+      px(X + 1, Y + 8, 30, 3, "#6b4428"); px(X + 1, Y - 12, 30, 3, "#6b4428"); px(X + 1, Y - 12, 3, 24, "#5a3920"); px(X + 28, Y - 12, 3, 24, "#5a3920");
+      for (let i = 0; i < 5; i++) {
+        const wx = X + 7 + i * 5;
+        if (i % 2 === 0) { px(wx, Y - 20, 1, 28, "#8a5a36"); px(wx - 1, Y - 24, 3, 4, C.steel); px(wx - 1, Y - 20, 3, 2, C.red); }
+        else { px(wx, Y - 14, 1, 18, C.steel); px(wx - 1, Y + 4, 3, 1, C.gold); px(wx, Y + 5, 1, 3, C.scab); px(wx + 1, Y + 6, 1, 3, C.red); }
+      }
+      break;
+    case "jar":
+      px(X + 3, Y - 6, 10, 18, "#4d3a30"); px(X + 1, Y - 2, 14, 11, "#4d3a30"); px(X + 4, Y - 8, 8, 3, "#6b5246");
+      px(X + 3, Y - 2, 2, 8, "#6d5446"); px(X + 2, Y + 10, 12, 2, "#3a2a22");
+      break;
+    case "teatable":
+      ctx.fillStyle = "#9a9385"; ctx.fillRect(X + 12, Y + 4, 8, 10);
+      ctx.fillStyle = "#b9b2a4"; ctx.beginPath(); ctx.ellipse(X + 16, Y + 3, 14, 6, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#d3ccbf"; ctx.beginPath(); ctx.ellipse(X + 16, Y + 2, 13, 5, 0, 0, 7); ctx.fill();
+      px(X + 8, Y - 3, 7, 5, C.cel); px(X + 9, Y - 4, 5, 1, "#c7e6d7"); px(X + 15, Y - 2, 2, 1, C.cel); px(X + 10, Y - 5, 3, 1, "#7fae98");
+      px(X + 19, Y, 3, 2, "#f4efe4"); px(X + 23, Y + 1, 3, 2, "#f4efe4");
+      ctx.fillStyle = "rgba(255,255,255,.55)"; ctx.fillRect(X + 11 + Math.round(Math.sin(t * 3)), Y - 8 - (t * 5 % 5), 1, 2);
+      break;
+    case "lantern": {
+      px(X + 4, Y + 6, 8, 7, "#8f887a"); px(X + 6, Y - 4, 4, 10, "#9a9385"); px(X + 3, Y - 12, 10, 8, "#a9a293");
+      px(X + 6, Y - 10, 4, 4, night ? (Math.sin(t * 9) > -.6 ? "#ffd27a" : "#ffc35a") : "#4a4540");
+      px(X + 1, Y - 15, 14, 3, "#8a8375"); px(X + 6, Y - 18, 4, 3, "#8a8375");
+      break;
+    }
+    case "boss":
+      px(X, Y - 4, 3 * T, 10, "#3f2416"); px(X, Y - 4, 3 * T, 2, "#5a3622"); px(X + 2, Y + 6, 3, 6, "#2e1a10"); px(X + 3 * T - 5, Y + 6, 3, 6, "#2e1a10");
+      px(X + 12, Y - 7, 18, 5, C.scroll); px(X + 11, Y - 7, 1, 5, C.wood); px(X + 30, Y - 7, 1, 5, C.wood);
+      px(X + 14, Y - 6, 12, 1, "#9a8a6a"); px(X + 14, Y - 4, 9, 1, "#9a8a6a");
+      px(X + 34, Y - 6, 7, 4, "#1a1a1a"); px(X + 42, Y - 9, 1, 6, C.wood);
+      px(X + 3, Y - 9, 6, 5, "#8a6a2a"); px(X + 2, Y - 10, 8, 1, "#a8873a");
+      ctx.fillStyle = "rgba(230,230,230,.6)";
+      for (let i = 0; i < 3; i++) { const k = (t * .4 + i / 3) % 1; ctx.fillRect(X + 5 + Math.round(Math.sin(t * 2 + i * 2) * 2 * k), Y - 12 - k * 12, 1, 2); }
+      break;
+    case "banner": {
+      px(X + 7, Y - 36, 2, 50, "#5e3b22"); px(X + 6, Y - 38, 4, 2, C.gold);
+      for (let i = 0; i < 14; i++) {
+        const off = Math.round(Math.sin(t * 3 - i * .5) * (i / 14) * 1.5);
+        px(X + 9 + i, Y - 34 + off, 1, 22, "#f7f3ec"); px(X + 9 + i, Y - 34 + off, 1, 2, "#b4475f"); px(X + 9 + i, Y - 14 + off, 1, 2, "#b4475f");
+      }
+      plumMark(ctx, X + 16, Y - 23, 5.5);
+      break;
+    }
+  }
+}
+const decoKey = d => (d.y + 1) * T - (d.t === "boss" ? 2 : 1);
+
+// ============================================================ 카메라 & 루프
+const view = { scale: 2, camX: 0, camY: 0, dpr: 1, w: 0, h: 0, left: 0, right: 0 };
+let TOP_H = 60, BOT_H = 108;
+function resize() {
+  TOP_H = $("top").offsetHeight + 10;
+  BOT_H = $("bottom").offsetHeight + 10;
+  view.dpr = window.devicePixelRatio || 1;
+  view.w = innerWidth; view.h = innerHeight;
+  cv.width = Math.round(view.w * view.dpr); cv.height = Math.round(view.h * view.dpr);
+}
+addEventListener("resize", resize);
+let panelW = -1;
+function layoutPanels() {
+  const availH = view.h - TOP_H - BOT_H;
+  const fit = Math.max(2, Math.min(5, availH / (H * T)));
+  const spare = (view.w - W * T * fit) / 2 - 12;
+  const want = spare >= 200 ? Math.floor(Math.min(340, spare)) : view.w >= 1100 ? 220 : 0;
+  if (want !== panelW) {
+    panelW = want;
+    for (const id of ["sideL", "sideR"]) {
+      const el = $(id);
+      el.hidden = !want;
+      el.style.width = want + "px";
+    }
+    if (want) renderSide();
+  }
+  for (const id of ["sideL", "sideR"]) { $(id).style.top = TOP_H + "px"; $(id).style.bottom = BOT_H + "px"; }
+  view.left = want ? want + 12 : 0;
+  view.right = view.w - view.left;
+}
+function updateCamera() {
+  layoutPanels();
+  const availH = view.h - TOP_H - BOT_H, midW = view.right - view.left;
+  view.scale = Math.max(2, Math.min(5, midW / (W * T), availH / (H * T)));
+  const vw = midW / view.scale, vh = availH / view.scale;
+  const clampC = (c, v, world) => world <= v ? (world - v) / 2 : Math.max(0, Math.min(world - v, c));
+  view.camX = clampC(player.x - vw / 2, vw, W * T) - view.left / view.scale;
+  view.camY = clampC(player.y - 14 - vh / 2, vh, H * T) - TOP_H / view.scale;
+}
+function screenToWorld(sx, sy) { return { x: sx / view.scale + view.camX, y: sy / view.scale + view.camY }; }
+function worldToScreen(x, y) { return { x: (x - view.camX) * view.scale, y: (y - view.camY) * view.scale }; }
+
+function draw(t) {
+  const { dpr, scale } = view, hr = new Date().getHours(), night = isNight(hr);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#1d1418"; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.imageSmoothingEnabled = false;
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, Math.round(-view.camX * dpr * scale), Math.round(-view.camY * dpr * scale));
+  ctx.drawImage(background(), 0, -SKY);
+  // 현판·산문 글씨는 확대해도 선명하게
+  const CX = (HALL.x0 + HALL.x1) / 2;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "900 8.5px 'Noto Serif KR', 'Noto Serif CJK KR', serif"; ctx.fillStyle = night ? "#c9c3b5" : "#f4efe4";
+  ctx.fillText("華 山 派", CX, 33.5);
+
+  const owners = new Map();
+  for (const n of npcs.values()) if (n.slot != null && !n.leaving) owners.set(n.slot, n);
+  const items = [];
+  for (const s of slots) items.push({ y: s.deskY * T + 13, f: () => drawDummy(s, owners.get(s.idx), t) });
+  for (const d of deco) items.push({ y: decoKey(d), f: () => drawDeco(d, t, night) });
+  for (const n of npcs.values()) {
+    items.push({ y: n.y, f: () => drawNpc(n, t) });
+    for (const h of shownHelpers(n)) items.push({ y: h.y, f: () => drawHelper(h, t) });
+  }
+  items.push({ y: player.y, f: () => drawChar(ctx, player.x, player.y, player.look, { dir: player.dir, anim: player.anim, moving: player.moving }) });
+  items.sort((a, b) => a.y - b.y).forEach(i => i.f());
+  drawFx(t);
+  drawPetals(t);
+
+  if (night) {
+    ctx.fillStyle = "rgba(12,16,48,.30)"; ctx.fillRect(0, -SKY, W * T, H * T + SKY);
+    ctx.globalCompositeOperation = "lighter";
+    const glow = (x, y, r) => {
+      const gr = ctx.createRadialGradient(x, y, 1, x, y, r);
+      gr.addColorStop(0, "rgba(255,180,90,.42)"); gr.addColorStop(1, "rgba(255,180,90,0)");
+      ctx.fillStyle = gr; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    };
+    glow(HALL.x0 + 3.5, 33, 26); glow(HALL.x1 - 2.5, 33, 26);
+    for (const d of deco) if (d.t === "lantern") glow(d.x * T + 8, d.y * T - 8, 30);
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  // 머리 위 라벨 (화면 좌표에서 선명하게)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const near = dlg ? null : nearestNpc();
+  [...npcs.values()].sort((a, b) => a.y - b.y).forEach(n => drawLabel(n, t, n === near));
+  for (const n of npcs.values()) for (const h of shownHelpers(n)) drawHelperLabel(h, t);
+  drawPopups(t);
+  if (!near && !dlg) {
+    const ps = worldToScreen(player.x, player.y - 34);
+    pill(ps.x, ps.y - 8, "🌸 장문인", "#8a2b42", "#fbecc0", 11);
+  }
+}
+
+function drawPopups(t) {
+  for (let i = popups.length - 1; i >= 0; i--) {
+    const p = popups[i], age = t - p.t0;
+    if (age > 2.4 || !npcs.has(p.n.pid)) { popups.splice(i, 1); continue; }
+    if (age < 0) continue;
+    const top = worldToScreen(p.n.x, p.n.y - 31);
+    ctx.globalAlpha = Math.max(0, Math.min(1, age * 6, 1 - (age - 1.6) / .8));
+    const pop = 1 + Math.max(0, .25 - age) * 1.6;
+    ctx.save(); ctx.translate(top.x, top.y - 66 - age * 20); ctx.scale(pop, pop);
+    pill(0, 0, p.text, p.kind === "tool" ? "#ffd7e0" : "#fff1c4", "#2b1d22", 12);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// 수련·대련 자세와 효과
+function trainPose(n, t, o) {
+  const s = slots[n.slot];
+  if (n.goal === "spar") {
+    const left = n.slot % 2 === 0, seed = (hash("pair" + (n.slot >> 1)) % 100) / 100;
+    const ph = Math.floor(((t * .9 + seed) % 1) * 4);
+    const st = (left ? ["guard", "strike", "guard", "raise"] : ["raise", "guard", "strike", "guard"])[ph];
+    o.arm = st; o.dir = left ? "right" : "left";
+    return { st, sw: SWORD_SIDE[st], lean: st === "strike" ? (left ? 2 : -2) : 0 };
+  }
+  const ph = Math.floor(((t * .5 + (n.pid % 97) / 97) % 1) * 3);
+  const st = ["guard", "raise", "low"][ph];
+  o.arm = st; o.dir = "down";
+  return { st, sw: SWORD_DOWN[st], lean: 0, s };
+}
+function stanceFx(n, tp, geo, x, y, t) {
+  if (n.stance === tp.st) return;
+  const prev = n.stance; n.stance = tp.st;
+  if (prev === undefined) return;
+  if (tp.st === "low") {
+    fx.push({ type: "slash", x: x + 2, y: y - 18, r: 12, a0: -2.4, a1: Math.PI / 2, ccw: true, t0: t, dur: .28 });
+    burst(geo.tipX, geo.tipY, 5, 26);
+    if (tp.s) tp.s.hitT = t;
+  } else if (tp.st === "strike") {
+    fx.push({ type: "spark", x: geo.tipX, y: geo.tipY, t0: t, dur: .25 });
+    const right = n.dir === "right";
+    fx.push({ type: "slash", x: x, y: y - 16, r: 11, a0: right ? -1.2 : Math.PI + 1.2, a1: right ? .2 : Math.PI - .2, ccw: !right, t0: t, dur: .2 });
+    burst(geo.tipX, geo.tipY, 3, 20);
+  }
+}
+
+function drawNpc(n, t) {
+  const m = mood(n.data), talking = dlg && dlg.npc === n;
+  const still = arrived(n) && !talking;
+  ctx.globalAlpha = Math.max(0, n.alpha);
+  const o = { dir: n.dir, anim: n.anim, moving: n.moving, talking: talking && Math.floor(t * 6) % 2 };
+  let tp = null;
+  if (still && (n.goal === "seat" || n.goal === "spar") && m === "work") tp = trainPose(n, t, o);
+  else if (still && n.goal === "lounge") {
+    if (m === "sleep") Object.assign(o, { body: "sit", arm: "meditate", closed: true, nod: true });
+    else {
+      const a = restAct(n.pid);
+      if (a === "stretch") Object.assign(o, { dir: "down", arm: Math.floor(t * 1.2 + n.pid) % 2 ? "up2" : "idle" });
+      else Object.assign(o, { body: "sit", arm: a, closed: a === "meditate" });
+    }
+  }
+  const x = n.x + (tp ? tp.lean : 0), y = n.y;
+  // 운기조식: 몸 주위로 기운이 감돈다
+  if (o.arm === "meditate" && !o.nod) {
+    const r = 1 + Math.sin(t * 2 + n.pid) * .08;
+    ctx.strokeStyle = `rgba(255,214,140,${.35 + Math.sin(t * 2 + n.pid) * .15})`;
+    ctx.beginPath(); ctx.ellipse(x, y - 9, 12 * r, 15 * r, 0, 0, 7); ctx.stroke();
+  }
+  drawChar(ctx, x, y, n.look, o);
+  if (tp) {
+    const geo = swordGeom(x, y, o.dir, tp.sw);
+    drawSword(ctx, geo.X, geo.Y, geo.a, geo.len);
+    stanceFx(n, tp, geo, x, y, t);
+  } else n.stance = undefined;
+  if (o.arm === "tea") {
+    ctx.fillStyle = "rgba(255,255,255,.7)";
+    for (let i = 0; i < 2; i++) { const k = (t * .7 + i * .5) % 1; ctx.fillRect(Math.round(x - 8 + 9 + Math.sin(t * 3 + i) * 1.5), Math.round(y - 28 + 16 - k * 8), 1, 1); }
+  }
+  if (o.arm === "polish" && Math.floor(t * 1.3 + n.pid) % 3 === 0) {
+    const sx = Math.round(x - 8 + ((t * 9 + n.pid) % 12)), sy = Math.round(y - 28 + 23);
+    ctx.fillStyle = "#fff"; ctx.fillRect(sx, sy - 2, 1, 5); ctx.fillRect(sx - 2, sy, 5, 1);
+  }
+  if (m === "sleep" && still && n.goal === "lounge") {
+    ctx.fillStyle = "#6a5aa8"; ctx.font = "bold 6px monospace"; ctx.textAlign = "left";
+    for (let i = 0; i < 3; i++) { const p = (t * .5 + i / 3) % 1; ctx.globalAlpha = 1 - p; ctx.fillText("z", x + 5 + p * 8, y - 20 - p * 12); }
+    ctx.globalAlpha = Math.max(0, n.alpha);
+  }
+  const pct = ctxPct(n.data);
+  if (pct != null && pct >= 80 && m === "work") { const p = (t * .8) % 1; px(x + 7, y - 26 + p * 6, 2, 3, "#6ec3ff"); }
+  ctx.globalAlpha = 1;
+}
+
+function pill(cx, cy, text, bg, fg, size = 11, tail = false) {
+  ctx.font = `700 ${size}px -apple-system, "Noto Sans KR", sans-serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const w = ctx.measureText(text).width + 10, h = size + 7;
+  ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 5); ctx.fill();
+  if (tail) { ctx.beginPath(); ctx.moveTo(cx - 4, cy + h / 2 - .5); ctx.lineTo(cx + 4, cy + h / 2 - .5); ctx.lineTo(cx, cy + h / 2 + 4); ctx.fill(); }
+  ctx.fillStyle = fg; ctx.fillText(text, cx, cy + .5);
+  return w;
+}
+function drawLabel(n, t, near) {
+  const s = n.data, top = worldToScreen(n.x, n.y - 31);
+  ctx.globalAlpha = Math.max(0, n.alpha);
+  // 기력 바 (컨텍스트)
+  const pct = ctxPct(s);
+  let y = top.y - 4;
+  if (pct != null) {
+    const bw = 34;
+    ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(top.x - bw / 2 - 1, y - 1, bw + 2, 5);
+    ctx.fillStyle = pct >= 80 ? "#d64545" : pct >= 50 ? "#e3a33a" : "#4fb286";
+    ctx.fillRect(top.x - bw / 2, y, bw * pct / 100, 3);
+  }
+  y -= 11;
+  let name = displayName(s); if (name.length > 12) name = name.slice(0, 11) + "…";
+  pill(top.x, y, name, KIND[s.kind].color, "#fff", 11);
+  y -= 21;
+  const m = mood(s);
+  const bob = m === "work" ? Math.sin(t * 4 + n.pid) * 1.5 : 0;
+  const bw = pill(top.x, y + bob, badge(s), "#fffaf0", "#2b1d22", 12, true);
+  if (n.pid === hoverPid) {
+    ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#f2a0b5";
+    ctx.strokeStyle = "#2b1d22"; ctx.lineWidth = 3;
+    const ay = y - 22 + Math.sin(t * 8) * 3;
+    ctx.strokeText("▼", top.x, ay); ctx.fillText("▼", top.x, ay); ctx.lineWidth = 1;
+  }
+  if (near) {
+    const p = 1 + Math.sin(t * 6) * .12;
+    ctx.font = `${16 * p}px sans-serif`; ctx.textAlign = "left";
+    ctx.fillText("💬", top.x + bw / 2 + 4, y + bob);
+  }
+  ctx.globalAlpha = 1;
+}
+
+const SIJIN = "자축인묘진사오미신유술해";
+let lastT = performance.now();
+function frame(ms) {
+  const dt = Math.min(.05, (ms - lastT) / 1000); lastT = ms;
+  const t = ms / 1000;
+  if (!firstSync) {
+    updatePlayer(dt);
+    for (const n of [...npcs.values()]) { updateNpc(n, dt); updateHelpers(n, dt); }
+    updateFx(dt, t);
+    updateCamera();
+    draw(t);
+    if (dlg) {
+      const full = dlg.pages[dlg.page];
+      if (dlg.shown < full.length) { dlg.shown = Math.min(full.length, dlg.shown + dt * 55); renderDialogText(); }
+    }
+    const n = !dlg && nearestNpc();
+    const narrow = innerWidth < 640;
+    $("hint").textContent = n ? `${narrow ? "탭" : "Space 또는 탭"}: 「${displayName(n.data)}」에게 보고 받기`
+      : narrow ? "탭해서 이동 · 제자를 탭하면 보고" : "방향키·WASD 또는 화면 탭으로 이동 · 제자를 탭하면 다가가서 보고를 받아요";
+  }
+  const d = new Date();
+  $("date").textContent = `${d.getMonth() + 1}월 ${d.getDate()}일 · ${SIJIN[Math.floor(((d.getHours() + 1) % 24) / 2)]}시 `
+    + d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  requestAnimationFrame(frame);
+}
+
+// ============================================================ 제자 명부 / 장부
+let modalKind = null;
+function openModal(kind) {
+  modalKind = kind;
+  closeDialog();
+  $("modal").hidden = false;
+  if (kind === "staff") renderStaff(); else renderReport();
+}
+function closeModal() { $("modal").hidden = true; modalKind = null; }
+$("bStaff").onclick = () => openModal("staff");
+$("bReport").onclick = () => openModal("report");
+$("mClose").onclick = closeModal;
+$("modal").addEventListener("pointerdown", e => { if (e.target.id === "modal") closeModal(); });
+
+function portraitHTML(n, cls = "portrait") {
+  const c = document.createElement("canvas");
+  c.width = 24; c.height = 24; c.className = cls;
+  drawChar(c.getContext("2d"), 12, 33, n.look, { dir: "down", noShadow: true, closed: mood(n.data) === "sleep" });
+  return c;
+}
+function gauge(label, pct, value, color) {
+  const col = color || (pct >= 60 ? "var(--ok)" : pct >= 25 ? "var(--mid)" : "var(--bad)");
+  return `<div class="stat"><span class="k">${label}</span><span class="gauge"><i style="width:${pct == null ? 0 : Math.max(2, pct)}%;background:${col}"></i></span><span class="v">${value}</span></div>`;
+}
+function moodText(s) {
+  const m = mood(s);
+  if (m === "rest") return REST_TXT[restAct(s.pid)];
+  return { work: "⚔️ 수련 중", sleep: "💤 낮잠", stopped: "🧊 점혈", unknown: "❓ 불명" }[m];
+}
+const activeStaff = () => [...npcs.values()].filter(n => !n.leaving);
+function renderStaff() {
+  const order = { work: 0, rest: 1, sleep: 2, stopped: 3, unknown: 4 };
+  const list = activeStaff().sort((a, b) => order[mood(a.data)] - order[mood(b.data)] || b.data.elapsed - a.data.elapsed);
+  $("mTitle").textContent = `👥 제자 명부 (${list.length}명)`;
+  const wrap = document.createElement("div"); wrap.className = "staff";
+  for (const n of list) {
+    const s = n.data, pct = ctxPct(s), fl = FLAMES[s.effort];
+    const lastAct = (s.activity || []).slice(-1)[0];
+    const card = document.createElement("div"); card.className = "card";
+    card.appendChild(portraitHTML(n));
+    const info = document.createElement("div"); info.className = "info";
+    info.innerHTML = `<div class="nm">${esc(displayName(s))} <span class="chip" style="background:${KIND[s.kind].color}">${KIND[s.kind].label}</span></div>
+      <div class="sub">${esc(jobTitle(s))} · ${esc(s.model || "?")}</div>
+      ${gauge("기력", pct == null ? null : 100 - pct, pct == null ? "?" : `${Math.round(100 - pct)}%`)}
+      ${gauge("내공", fl == null ? null : fl / 5 * 100, esc(s.effort || "?"), "#b4475f")}
+      ${gauge("수련", Math.min(100, Math.log10(1 + (s.elapsed || 0) / 60) / Math.log10(1 + 43200) * 100), shortDur(s.elapsed), "#7a5ab8")}
+      <div class="act"><span class="st">${moodText(s)} · ${lastAct ? esc(lastAct.text) : "기록 없음"}</span></div>`;
+    const btn = document.createElement("button"); btn.className = "mini"; btn.textContent = "📣 불러서 보고";
+    btn.onclick = () => { closeModal(); callOver(n); };
+    info.querySelector(".act").appendChild(btn);
+    card.appendChild(info);
+    wrap.appendChild(card);
+  }
+  $("mBody").replaceChildren(wrap);
+}
+function callOver(n) {
+  talkTarget = n;
+  if (dist(player, n) < 24) { openDialog(n); talkTarget = null; return; }
+  const pt = tileOf(player), tt = tileOf(n);
+  player.path = findPath(pt.x, pt.y, tt.x, tt.y) || [];
+}
+function renderReport() {
+  const list = activeStaff(), S = list.map(n => n.data);
+  $("mTitle").textContent = "📜 문파 장부";
+  const cnt = f => S.filter(f).length;
+  const pcts = S.map(ctxPct).filter(v => v != null);
+  const cost = S.reduce((a, s) => a + (s.cost_usd || 0), 0);
+  const spar = list.filter(n => mood(n.data) === "work" && partnerOf(n)).length;
+  let html = `<div class="rep"><h3>문파 개요</h3><table>
+    <tr><th>총 제자</th><td>${S.length}명 (본산 ${cnt(s => s.mode !== "headless")} · 객원 ${cnt(s => s.mode === "headless")})</td></tr>
+    <tr><th>수련 현황</th><td>⚔️ ${cnt(s => mood(s) === "work")} (대련 ${spar}) · 🍵 ${cnt(s => mood(s) === "rest")} · 💤 ${cnt(s => mood(s) === "sleep")}</td></tr>
+    <tr><th>사제</th><td>🌱 ${S.reduce((a, s) => a + helperBusy(s).length, 0)}명 수련 중 (서브에이전트)</td></tr>
+    <tr><th>평균 기력 소모</th><td>${pcts.length ? (pcts.reduce((a, b) => a + b, 0) / pcts.length).toFixed(1) + "%" : "-"}</td></tr>
+    <tr><th>집계된 재정 지출</th><td>${cost ? "$" + cost.toFixed(2) + " (Grok 세션 기준)" : "-"}</td></tr>
+  </table><h3>계파별 현황</h3><table><tr><th>계파</th><th>인원</th><th>수련</th><th>심법(모델)</th></tr>`;
+  for (const k of Object.keys(KIND)) {
+    const ks = S.filter(s => s.kind === k);
+    if (!ks.length) continue;
+    const models = [...new Set(ks.map(s => s.model).filter(Boolean))].join(", ");
+    html += `<tr><td><span class="chip" style="background:${KIND[k].color}">${KIND[k].label}</span></td><td>${ks.length}</td>
+      <td>${ks.filter(s => mood(s) === "work").length}</td><td>${esc(models || "-")}</td></tr>`;
+  }
+  html += `</table><h3>🏆 이달의 제자</h3><div class="awards" id="awards"></div></div>`;
+  $("mBody").innerHTML = html;
+
+  const pick = (f, score) => { let b = null, bs = -Infinity; for (const n of list) if (f(n.data)) { const v = score(n.data); if (v > bs) { bs = v; b = n; } } return b; };
+  const awards = [
+    ["🏯 터줏대감상", pick(() => true, s => s.elapsed), s => `수련 ${longDur(s.elapsed)}`],
+    ["⚡ 정진상", pick(s => mood(s) === "work", s => (s.activity || []).slice(-1)[0]?.t || 0), s => `지금도 수련 중 · ${shortDur(now() - (s.status_since || now() - s.elapsed))}째`],
+    ["🔥 심공상", pick(s => s.effort in FLAMES, s => FLAMES[s.effort] * 1e9 - (s.elapsed || 0)), s => `내공 ${s.effort} ${flames(s.effort)}`],
+    ["😵 주화입마 주의", pick(s => ctxPct(s) != null, s => ctxPct(s)), s => `기력 소모 ${ctxPct(s).toFixed(1)}%`],
+    ["😴 잠룡상", pick(s => mood(s) === "sleep", s => idleSecs(s)), s => `${longDur(idleSecs(s))}째 낮잠 중`],
+  ];
+  const box = $("awards");
+  for (const [what, n, why] of awards) {
+    if (!n) continue;
+    const el = document.createElement("div"); el.className = "award";
+    el.appendChild(portraitHTML(n));
+    el.insertAdjacentHTML("beforeend", `<div><div class="what">${what}</div><div class="who2">${esc(displayName(n.data))}</div><div class="why">${esc(why(n.data))}</div></div>`);
+    el.style.cursor = "pointer"; el.onclick = () => { closeModal(); callOver(n); };
+    box.appendChild(el);
+  }
+}
+
+let hoverPid = null;
+function sideRow(n) {
+  const s = n.data, pct = ctxPct(s), lastAct = (s.activity || []).slice(-1)[0];
+  const row = document.createElement("div");
+  row.className = "row" + (hoverPid === n.pid ? " on" : "");
+  row.appendChild(portraitHTML(n));
+  const col = pct == null ? "" : pct >= 80 ? "var(--bad)" : pct >= 50 ? "var(--mid)" : "var(--ok)";
+  const st = mood(s) === "rest" ? `${REST_TXT[restAct(s.pid)]} ${shortDur(idleSecs(s))}` : badge(s);
+  row.insertAdjacentHTML("beforeend", `<div class="info">
+    <div class="nm"><span>${esc(displayName(s))}</span><span class="chip" style="background:${KIND[s.kind].color}">${KIND[s.kind].label}</span></div>
+    <div class="st">${esc(st)} · ${esc((s.model || "?").replace(/^claude-/, ""))} ${flames(s.effort)}</div>
+    <div class="gauge" title="기력 소모(컨텍스트)"><i style="width:${pct ?? 0}%;background:${col}"></i></div>
+    <div class="la">${lastAct ? esc(lastAct.text) : esc(s.task || "기록 없음")}</div></div>`);
+  row.onmouseenter = () => { hoverPid = n.pid; row.classList.add("on"); };
+  row.onmouseleave = () => { if (hoverPid === n.pid) hoverPid = null; row.classList.remove("on"); };
+  row.onclick = () => callOver(n);
+  return row;
+}
+function renderSide() {
+  if (!panelW) return;
+  const list = activeStaff();
+  const L = list.filter(n => mood(n.data) === "work")
+    .sort((a, b) => (b.data.status_since || 0) - (a.data.status_since || 0));
+  const R = list.filter(n => mood(n.data) !== "work")
+    .sort((a, b) => idleSecs(a.data) - idleSecs(b.data));
+  const fill = (id, cnt, rows, empty) => {
+    $(cnt).textContent = `(${rows.length})`;
+    if (!rows.length) { $(id).innerHTML = `<div class="empty">${empty}</div>`; return; }
+    $(id).replaceChildren(...rows.map(sideRow));
+  };
+  fill("listL", "cntL", L, "지금은 모두 쉬는 중입니다 🍵");
+  fill("listR", "cntR", R, "전원 수련 중! 🔥");
+}
+
+renderLog();
+resize();
+sync();
+setInterval(sync, 3000);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

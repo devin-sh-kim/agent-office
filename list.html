@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-office</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --line: #262b36; --text: #e6e8ee; --dim: #8a91a3;
+    --busy: #3ecf8e; --idle: #6b7385; --warn: #f5a524; --bad: #f05252;
+    --claude: #d97757; --codex: #7aa2f7; --grok: #c0caf5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+           padding: 14px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
+           background: var(--bg); z-index: 1; }
+  h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .summary { display: flex; gap: 14px; color: var(--dim); font-size: 13px; }
+  .summary b { color: var(--text); }
+  .controls { margin-left: auto; display: flex; gap: 8px; align-items: center; color: var(--dim); font-size: 12px; }
+  .controls label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
+  main { padding: 16px 18px; display: grid; gap: 12px;
+         grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+          border-left: 3px solid var(--idle); }
+  .card.busy { border-left-color: var(--busy); }
+  .card.stopped { border-left-color: var(--bad); }
+  .top { display: flex; align-items: center; gap: 8px; }
+  .kind { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+          padding: 2px 6px; border-radius: 4px; background: #222733; }
+  .kind.claude { color: var(--claude); } .kind.codex { color: var(--codex); } .kind.grok { color: var(--grok); }
+  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .status { font-size: 12px; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); }
+  .busy .dot { background: var(--busy); animation: pulse 1.4s infinite; }
+  .stopped .dot { background: var(--bad); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .title { color: var(--dim); font-size: 13px; margin: 4px 0 8px; overflow: hidden;
+           text-overflow: ellipsis; white-space: nowrap; }
+  dl { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 3px 10px; margin: 0; font-size: 13px; }
+  dt { color: var(--dim); } dd { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .ctx { margin-top: 10px; }
+  .ctx .lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); margin-bottom: 3px; }
+  .bar { height: 6px; background: #232836; border-radius: 3px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--busy); }
+  .bar > div.mid { background: var(--warn); } .bar > div.high { background: var(--bad); }
+  .cwd { margin-top: 8px; color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  details { margin-top: 6px; font-size: 12px; color: var(--dim); }
+  details pre { white-space: pre-wrap; word-break: break-all; margin: 4px 0 0; }
+  .empty { color: var(--dim); padding: 40px; text-align: center; grid-column: 1/-1; }
+  .err { color: var(--bad); }
+  .nav { display: flex; gap: 6px; }
+  .nav a { color: var(--text); text-decoration: none; font-size: 13px; padding: 4px 10px; border: 1px solid var(--line);
+           border-radius: 6px; background: var(--panel); white-space: nowrap; }
+  .nav a:hover { border-color: var(--dim); }
+  .subs { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+  .subs .hd { font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+  .subs .hd b { color: var(--text); }
+  .sub { display: grid; grid-template-columns: 10px 1fr auto; gap: 2px 8px; align-items: center; padding: 4px 0; font-size: 12px; }
+  .sub + .sub { border-top: 1px solid #1f232c; }
+  .sub .dot { width: 7px; height: 7px; }
+  .sub.busy .dot { background: var(--busy); animation: pulse 1.4s infinite; }
+  .sub.done { opacity: .55; }
+  .sub .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub .tm { color: var(--dim); white-space: nowrap; }
+  .sub .meta, .sub .la { grid-column: 2 / 4; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub .bar { height: 3px; grid-column: 2 / 4; }
+  .tag { font-size: 11px; color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+</style>
+</head>
+<body>
+<header>
+  <nav class="nav"><a href="/studio">🏢 스튜디오</a><a href="/hwasan">🌸 화산</a></nav>
+  <h1>agent-office <span id="host" class="tag"></span></h1>
+  <div class="summary" id="summary"></div>
+  <div class="controls">
+    <label><input type="checkbox" id="hideIdle"> 대기 숨기기</label>
+    <label><input type="checkbox" id="hideHeadless"> 헤드리스 숨기기</label>
+    <span id="updated"></span>
+  </div>
+</header>
+<main id="list"><div class="empty">불러오는 중…</div></main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function dur(sec) {
+  if (sec == null || sec < 0) return "-";
+  sec = Math.floor(sec);
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600),
+        m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  if (d) return `${d}일 ${h}시간`;
+  if (h) return `${h}시간 ${m}분`;
+  if (m) return `${m}분 ${s}초`;
+  return `${s}초`;
+}
+const ago = (now, t) => t ? dur(now - t) + " 전" : "-";
+const tok = n => n == null ? "-" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
+const mb = b => (b / 1048576).toFixed(0) + " MB";
+const STATUS = { busy: "작업중", idle: "대기", stopped: "정지됨", unknown: "알 수 없음" };
+
+function subRow(a, now) {
+  const pct = a.ctx_used != null && a.ctx_window ? Math.min(100, a.ctx_used / a.ctx_window * 100) : null;
+  const lvl = pct == null ? "" : pct >= 80 ? "high" : pct >= 50 ? "mid" : "";
+  const last = (a.activity || []).slice(-1)[0];
+  const tm = a.status === "busy" ? dur(now - a.started) : `완료 ${ago(now, a.updated)}`;
+  const meta = [a.type && a.type !== a.name ? a.type : null, a.model, a.effort,
+                pct != null ? `ctx ${tok(a.ctx_used)} (${pct.toFixed(0)}%)` : null, a.tools ? `도구 ${a.tools}회` : null].filter(Boolean).join(" · ");
+  return `<div class="sub ${esc(a.status)}" title="${esc(a.task || "")}">
+    <span class="dot"></span><span class="nm">${esc(a.name || a.id)}</span><span class="tm">${esc(tm)}</span>
+    <span class="meta mono">${esc(meta || "-")}</span>
+    ${pct != null ? `<div class="bar"><div class="${lvl}" style="width:${pct}%"></div></div>` : ""}
+    ${last ? `<span class="la">${last.kind === "tool" ? "🛠" : "💬"} ${esc(last.text)}</span>` : ""}
+  </div>`;
+}
+function subsBlock(r, now) {
+  const subs = r.subagents || [];
+  if (!subs.length) return "";
+  const busy = subs.filter(a => a.status === "busy").length;
+  return `<div class="subs"><div class="hd">서브에이전트 <b>${subs.length}</b>${busy ? ` · 실행 중 <b>${busy}</b>` : ""}</div>
+    ${subs.map(a => subRow(a, now)).join("")}</div>`;
+}
+
+function card(r, now) {
+  const pct = r.ctx_used != null && r.ctx_window ? Math.min(100, r.ctx_used / r.ctx_window * 100) : null;
+  const lvl = pct == null ? "" : pct >= 80 ? "high" : pct >= 50 ? "mid" : "";
+  const statusTxt = (STATUS[r.status] || r.status) + (r.phase ? ` · ${r.phase}` : "");
+  const sinceTxt = r.status_since ? ` (${dur(now - r.status_since)})` : "";
+  return `<div class="card ${esc(r.status)}" data-pid="${r.pid}">
+    <div class="top">
+      <span class="kind ${r.kind}">${r.kind}</span>
+      <span class="name">${esc(r.name || r.title || (r.cwd || "").split("/").pop() || "(이름 없음)")}</span>
+      <span class="status"><span class="dot"></span>${esc(statusTxt)}${esc(sinceTxt)}</span>
+    </div>
+    <div class="title">${r.name && r.title ? esc(r.title) : "&nbsp;"}</div>
+    <dl>
+      <dt>모델</dt><dd class="mono">${esc(r.model || "-")}</dd>
+      <dt>추론</dt><dd>${esc(r.effort || "-")}</dd>
+      <dt>실행</dt><dd>${dur(r.elapsed)}</dd>
+      <dt>최근활동</dt><dd>${ago(now, r.last_activity)}</dd>
+      <dt>CPU</dt><dd>${r.cpu}%</dd>
+      <dt>메모리</dt><dd>${mb(r.rss)}</dd>
+      <dt>PID</dt><dd class="mono">${r.pid}${r.tty ? " · " + esc(r.tty) : ""}</dd>
+      <dt>모드</dt><dd>${esc(r.mode || "-")}${r.cost_usd ? ` · $${r.cost_usd.toFixed(2)}` : ""}</dd>
+    </dl>
+    <div class="ctx">
+      <div class="lbl"><span>컨텍스트</span>
+        <span>${pct == null ? (r.note ? esc(r.note) : "정보 없음") : `${tok(r.ctx_used)} / ${tok(r.ctx_window)} (${pct.toFixed(1)}%)`}</span></div>
+      <div class="bar"><div class="${lvl}" style="width:${pct ?? 0}%"></div></div>
+    </div>
+    <div class="cwd mono" title="${esc(r.cwd)}">${esc(r.cwd || "")}</div>
+    ${subsBlock(r, now)}
+    ${r.error ? `<div class="err">${esc(r.error)}</div>` : ""}
+    <details><summary>상세</summary><pre>${esc([
+      r.session_id && "session: " + r.session_id,
+      r.version && "version: " + r.version,
+      r.last_prompt && "마지막 프롬프트: " + r.last_prompt,
+      "cmd: " + r.cmd,
+    ].filter(Boolean).join("\n"))}</pre></details>
+  </div>`;
+}
+
+let last = null;
+function render() {
+  if (!last) return;
+  const { now, sessions, host } = last;
+  $("#host").textContent = host;
+  let rows = sessions;
+  const subBusy = r => (r.subagents || []).filter(a => a.status === "busy").length;
+  if ($("#hideIdle").checked) rows = rows.filter(r => r.status !== "idle" || subBusy(r));
+  if ($("#hideHeadless").checked) rows = rows.filter(r => r.mode !== "headless");
+  const cnt = k => sessions.filter(r => r.kind === k).length;
+  const busy = sessions.filter(r => r.status === "busy").length;
+  $("#summary").innerHTML = `<span>전체 <b>${sessions.length}</b></span><span>작업중 <b>${busy}</b></span>
+    <span>서브에이전트 <b>${sessions.reduce((a, r) => a + subBusy(r), 0)}</b></span>
+    <span>claude <b>${cnt("claude")}</b></span><span>codex <b>${cnt("codex")}</b></span><span>grok <b>${cnt("grok")}</b></span>`;
+  $("#list").innerHTML = rows.length ? rows.map(r => card(r, now)).join("") : `<div class="empty">표시할 세션 없음</div>`;
+}
+
+async function refresh() {
+  try {
+    const res = await fetch("/api/sessions", { cache: "no-store" });
+    last = await res.json();
+    // 열려 있던 상세 패널 유지
+    const open = new Set([...document.querySelectorAll("details[open]")].map(d => d.closest(".card").dataset.pid));
+    render();
+    document.querySelectorAll(".card").forEach(c => { if (open.has(c.dataset.pid)) c.querySelector("details").open = true; });
+    $("#updated").textContent = "갱신 " + new Date().toLocaleTimeString("ko-KR");
+  } catch (e) {
+    $("#updated").innerHTML = `<span class="err">연결 실패</span>`;
+  }
+}
+for (const id of ["hideIdle", "hideHeadless"]) {
+  const el = $("#" + id);
+  el.checked = localStorage.getItem(id) === "1";
+  el.onchange = () => { localStorage.setItem(id, el.checked ? "1" : "0"); render(); };
+}
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

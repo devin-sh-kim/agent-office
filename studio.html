@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>AI 스튜디오</title>
+<style>
+  :root { --ink: #3a2a1a; --paper: #fff7e6; --paper2: #fbecd0; --rim: #f3d9a4; --accent: #e8833a; --gold: #f5c542;
+          --ok: #3ecf8e; --mid: #f5a524; --bad: #f05252; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #2b2118; color: var(--ink);
+               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; }
+  canvas#game { position: fixed; inset: 0; width: 100vw; height: 100vh; touch-action: none; display: block; }
+  button { font: inherit; }
+
+  /* 레트로 창 */
+  .win { background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 6px;
+         box-shadow: inset 0 0 0 2px var(--rim), 4px 4px 0 rgba(0,0,0,.45); }
+  .title { background: linear-gradient(#f4a65c, #e07a2e); color: #fff; font-weight: 800; font-size: 13px;
+           padding: 3px 8px; text-shadow: 1px 1px 0 #7a3b0e; border-bottom: 3px solid var(--ink);
+           display: flex; align-items: center; gap: 6px; border-radius: 3px 3px 0 0; }
+
+  /* 상단 회사 정보 */
+  #top { position: fixed; top: 6px; left: 6px; right: 6px; z-index: 2; display: flex; align-items: stretch;
+         gap: 6px; padding: 4px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  #top .plate { background: var(--ink); color: var(--gold); font-weight: 900; padding: 4px 12px; border-radius: 3px;
+                display: flex; align-items: center; letter-spacing: .02em; }
+  #top .cell { background: var(--paper2); border: 2px solid #d8b98a; border-radius: 4px; padding: 2px 9px;
+               display: flex; align-items: center; gap: 5px; font-size: 13px; }
+  #top .cell .lbl { font-size: 11px; font-weight: 800; color: #fff; background: #8a6a48; padding: 0 5px; border-radius: 3px; }
+  #top .cell b { font-size: 15px; }
+
+  /* 하단: 사내 소식 + 메뉴 */
+  #bottom { position: fixed; left: 6px; right: 6px; bottom: 6px; z-index: 2; display: flex; gap: 6px; height: 96px; }
+  #log { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+  #logLines { flex: 1; padding: 4px 8px; font-size: 13px; line-height: 1.45; display: flex; flex-direction: column;
+              justify-content: flex-end; overflow: hidden; }
+  #logLines div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #logLines .tm { color: #9a7d5c; font-size: 11px; margin-right: 5px; font-variant-numeric: tabular-nums; }
+  #logLines .nm { font-weight: 800; }
+  #menu { display: grid; grid-template-columns: repeat(4, 60px); gap: 6px; }
+  .btn { background: linear-gradient(#fff3d6, #f6d79e); color: var(--ink); border: 3px solid var(--ink); border-radius: 6px;
+         box-shadow: inset 0 -3px 0 #d9a95a, 3px 3px 0 rgba(0,0,0,.45); cursor: pointer; text-decoration: none;
+         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 22px; padding: 0; }
+  .btn span { font-size: 12px; font-weight: 800; }
+  .btn:active { transform: translate(2px, 2px); box-shadow: inset 0 -1px 0 #d9a95a, 1px 1px 0 rgba(0,0,0,.45); }
+
+  #hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: 112px; background: rgba(58,42,26,.85); color: #fff7e6;
+          padding: 4px 12px; border-radius: 12px; font-size: 12px; z-index: 2; pointer-events: none; max-width: 92vw; text-align: center; }
+  #toasts { position: fixed; top: 64px; right: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
+  .toast { background: var(--paper); border: 3px solid var(--ink); padding: 6px 10px; border-radius: 6px; font-size: 13px;
+           font-weight: 700; box-shadow: 3px 3px 0 rgba(0,0,0,.4); animation: pop .25s ease-out; }
+  @keyframes pop { from { transform: scale(.7); opacity: 0; } }
+
+  /* 대화창 */
+  #dlg { position: fixed; left: 50%; bottom: 112px; transform: translateX(-50%); width: min(760px, calc(100vw - 16px));
+         z-index: 4; display: flex; gap: 12px; padding: 12px; cursor: pointer; }
+  #dlg[hidden] { display: none; }
+  .portrait { image-rendering: pixelated; background: #e8d8b8; border: 3px solid var(--ink); border-radius: 6px; flex: none; }
+  #portrait { width: 84px; height: 84px; }
+  #dlg .body { flex: 1; min-width: 0; }
+  #dlg .who { font-weight: 800; font-size: 15px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #dlg .who .role { font-weight: 600; font-size: 12px; color: #7a6248; }
+  #dlg .text { margin-top: 6px; font-size: 15px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+               min-height: 4.6em; max-height: 36vh; overflow-y: auto; }
+  #dlg .foot { display: flex; justify-content: space-between; font-size: 12px; color: #9a7d5c; margin-top: 4px; }
+  #dlg .next { animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .chip { font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 4px; color: #fff; }
+
+  /* 모달 (직원 명부 / 보고서) */
+  #modal { position: fixed; inset: 0; z-index: 5; background: rgba(20,12,4,.45); display: flex; align-items: center; justify-content: center; }
+  #modal[hidden] { display: none; }
+  #modal .sheet { width: min(860px, 96vw); max-height: 84vh; display: flex; flex-direction: column; }
+  #modal .title { font-size: 15px; padding: 6px 10px; }
+  #modal .title button { margin-left: auto; background: var(--ink); color: #fff; border: 0; border-radius: 4px;
+                         width: 26px; height: 24px; cursor: pointer; font-weight: 900; }
+  #mBody { overflow-y: auto; padding: 10px; }
+  .staff { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+  .card { background: var(--paper2); border: 2px solid #d8b98a; border-radius: 6px; padding: 8px; display: flex; gap: 8px; }
+  .card .portrait { width: 56px; height: 56px; }
+  .card .info { flex: 1; min-width: 0; font-size: 12px; }
+  .card .nm { font-weight: 800; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .sub { color: #7a6248; margin: 1px 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat { display: grid; grid-template-columns: 42px 1fr 46px; align-items: center; gap: 5px; margin: 2px 0; }
+  .stat .k { font-weight: 800; color: #8a6a48; font-size: 11px; }
+  .stat .v { text-align: right; font-variant-numeric: tabular-nums; font-size: 11px; }
+  .gauge { height: 8px; background: #e6d2ac; border: 1px solid #b89a6e; border-radius: 2px; overflow: hidden; }
+  .gauge i { display: block; height: 100%; background: var(--ok); }
+  .card .act { margin-top: 6px; display: flex; gap: 6px; align-items: center; }
+  .card .act .st { flex: 1; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini { background: linear-gradient(#fff3d6, #f6d79e); border: 2px solid var(--ink); border-radius: 4px; padding: 2px 8px;
+          font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 2px 2px 0 rgba(0,0,0,.35); }
+  .rep h3 { margin: 6px 0; font-size: 14px; background: var(--ink); color: var(--gold); display: inline-block; padding: 2px 10px; border-radius: 3px; }
+  .rep table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
+  .rep td, .rep th { border-bottom: 1px dashed #d8b98a; padding: 5px 6px; text-align: left; }
+  .rep th { color: #8a6a48; font-size: 12px; }
+  .awards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+  .award { background: var(--paper2); border: 2px solid #d8b98a; border-radius: 6px; padding: 8px; display: flex; gap: 8px; align-items: center; }
+  .award .portrait { width: 44px; height: 44px; }
+  .award .what { font-size: 12px; font-weight: 800; color: #b35c1e; }
+  .award .who2 { font-weight: 800; }
+  .award .why { font-size: 12px; color: #7a6248; }
+
+  /* 양옆 사원 목록 */
+  .side { position: fixed; z-index: 2; display: flex; flex-direction: column; overflow: hidden; }
+  .side[hidden] { display: none; }
+  #sideL { left: 6px; } #sideR { right: 6px; }
+  .side .list { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+  .side .empty { color: #9a7d5c; font-size: 13px; text-align: center; padding: 20px 6px; }
+  .row { background: var(--paper2); border: 2px solid #d8b98a; border-radius: 6px; padding: 5px 6px; display: flex;
+         gap: 7px; cursor: pointer; align-items: center; }
+  .row:hover, .row.on { border-color: var(--accent); background: #fff1d2; }
+  .row .portrait { width: 44px; height: 44px; border-width: 2px; }
+  .row .info { flex: 1; min-width: 0; font-size: 12px; line-height: 1.35; }
+  .row .nm { font-weight: 800; font-size: 13px; display: flex; gap: 4px; align-items: center; }
+  .row .nm span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .nm .chip { font-size: 10px; padding: 0 4px; flex: none; }
+  .row .st, .row .la { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .la { color: #8a7258; font-size: 11px; }
+  .row .gauge { height: 6px; margin: 2px 0; }
+
+  @media (max-width: 640px) {
+    #bottom { height: 84px; }
+    #menu { grid-template-columns: repeat(4, 44px); gap: 4px; }
+    .btn { font-size: 18px; } .btn span { font-size: 10px; }
+    #logLines { font-size: 12px; }
+    #hint, #dlg { bottom: 98px; }
+    #top { gap: 4px; padding: 3px; }
+    #top .plate { font-size: 12px; padding: 2px 8px; }
+    #top .cell { font-size: 11px; padding: 1px 6px; gap: 3px; }
+    #top .cell b { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="top" class="win">
+  <div class="plate" id="co">AI 스튜디오</div>
+  <div class="cell"><span class="lbl">날짜</span><span id="date"></span></div>
+  <div class="cell"><span class="lbl">직원</span><b id="sN">0</b>명</div>
+  <div class="cell">⌨️ 근무 <b id="sB">0</b></div>
+  <div class="cell">☕ 휴식 <b id="sI">0</b></div>
+  <div class="cell">💤 졸음 <b id="sS">0</b></div>
+  <div class="cell"><span class="lbl">경비</span><b id="sC">-</b></div>
+</div>
+<div id="sideL" class="win side" hidden><div class="title">⌨️ 근무 중 <span id="cntL"></span></div><div class="list" id="listL"></div></div>
+<div id="sideR" class="win side" hidden><div class="title">☕ 휴식 · 💤 졸음 <span id="cntR"></span></div><div class="list" id="listR"></div></div>
+<div id="toasts"></div>
+<div id="hint"></div>
+<div id="bottom">
+  <div id="log" class="win"><div class="title">📢 사내 소식</div><div id="logLines"></div></div>
+  <div id="menu">
+    <button class="btn" id="bStaff">👥<span>직원</span></button>
+    <button class="btn" id="bReport">📊<span>보고서</span></button>
+    <a class="btn" href="/hwasan">🌸<span>화산</span></a>
+    <a class="btn" href="/">📋<span>목록</span></a>
+  </div>
+</div>
+<div id="dlg" class="win" hidden>
+  <canvas id="portrait" class="portrait" width="28" height="28"></canvas>
+  <div class="body">
+    <div class="who"><span id="dName"></span><span class="chip" id="dKind"></span><span class="role" id="dRole"></span></div>
+    <div class="text" id="dText"></div>
+    <div class="foot"><span id="dPage"></span><span class="next" id="dNext">▼ Space / 탭</span></div>
+  </div>
+</div>
+<div id="modal" hidden>
+  <div class="win sheet">
+    <div class="title"><span id="mTitle"></span><button id="mClose">✕</button></div>
+    <div id="mBody"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// ============================================================ 기본 설정
+const T = 16;                       // 타일 크기(논리 px)
+const COLS = 4;                     // 책상 줄당 자리 수
+const SLEEP_AFTER = 3600;           // 이만큼(초) 대기하면 졸기 시작
+const KIND = {
+  claude: { color: "#d97757", shirt: "#d97757", pants: "#5b4636", label: "Claude", logo: "#d97757" },
+  codex:  { color: "#4f7cf0", shirt: "#4f7cf0", pants: "#2d3748", label: "Codex",  logo: "#4f7cf0" },
+  grok:   { color: "#3a3f4b", shirt: "#2f3542", pants: "#1e2229", label: "Grok",   logo: "#111", mark: "#e5e7eb" },
+};
+const HAIR = ["#3b2a20", "#6b4423", "#1f1f1f", "#a0522d", "#d4a373", "#8b5cf6", "#e07a5f", "#2f4858"];
+const SKIN = ["#f8d5b8", "#f1c19a", "#d9a074", "#a8704a"];
+const CAP = ["#e63946", "#2a9d8f", "#f4a261", "#264653"];
+
+const cv = document.getElementById("game");
+const ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
+
+let W = 27, H = 14, solid = [], slots = [], loungeTiles = [], deco = [], DOOR_X = 12;
+let bossSeat = { x: 0, y: 0 };
+
+// ============================================================ 맵 생성
+function buildWorld(nSlots) {
+  const rows = Math.max(2, Math.ceil(nSlots / COLS));
+  H = 8 + rows * 4;
+  solid = [];
+  for (let y = 0; y < H; y++) {
+    solid.push([]);
+    for (let x = 0; x < W; x++) solid[y].push(x === 0 || x === W - 1 || y <= 2 || y === H - 1);
+  }
+  const block = (x, y, w = 1, h = 1) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) solid[y + j][x + i] = true; };
+  // 출입문
+  DOOR_X = 12; solid[H - 1][12] = solid[H - 1][13] = false;
+  // 책상: 의자(seatY) → 책상(seatY+1) → 통로 2줄 (머리 위 라벨 공간)
+  slots = [];
+  for (let r = 0; r < rows; r++) {
+    const seatY = 4 + r * 4;
+    for (let i = 0; i < COLS; i++) {
+      const dx = 2 + i * 4;
+      block(dx, seatY + 1, 2, 1);
+      slots.push({ idx: slots.length, dx, seatY, deskY: seatY + 1 });
+    }
+  }
+  // 휴게실과 소품
+  deco = [
+    { t: "plant", x: 18, y: 3 }, { t: "plant", x: 18, y: H - 2 },
+    { t: "vending", x: 20, y: 3 }, { t: "cooler", x: 22, y: 3 }, { t: "coffee", x: 23, y: 3, w: 2 },
+    { t: "plant", x: 25, y: 3 }, { t: "sofa", x: 21, y: 6, w: 3 }, { t: "table", x: 21, y: 8, w: 2 },
+    { t: "arcade", x: 25, y: 6 }, { t: "plant", x: 25, y: H - 2 },
+    { t: "boss", x: 2, y: H - 3, w: 3 },
+  ];
+  for (const d of deco) block(d.x, d.y, d.w || 1, 1);
+  bossSeat = { x: 3.5 * T, y: (H - 4) * T + 12 };
+  loungeTiles = [];
+  for (let y = 4; y < H - 1; y++) for (let x = 20; x <= 25; x++) if (!solid[y][x]) loungeTiles.push({ x, y });
+}
+const walkable = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !solid[y][x];
+
+function findPath(sx, sy, tx, ty) {
+  if (!walkable(tx, ty)) return null;
+  const key = (x, y) => y * W + x, start = key(sx, sy), prev = new Map([[start, -1]]), q = [[sx, sy]];
+  for (let qi = 0; qi < q.length; qi++) {
+    const [x, y] = q[qi];
+    if (x === tx && y === ty) {
+      const path = [];
+      for (let k = key(x, y); k !== start; k = prev.get(k)) path.push({ x: k % W, y: Math.floor(k / W) });
+      return path.reverse();
+    }
+    for (const [ddx, ddy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + ddx, ny = y + ddy, k = key(nx, ny);
+      if (walkable(nx, ny) && !prev.has(k)) { prev.set(k, key(x, y)); q.push([nx, ny]); }
+    }
+  }
+  return null;
+}
+const tileOf = e => ({ x: Math.floor(e.x / T), y: Math.floor(e.y / T) });
+
+// ============================================================ 엔티티
+function hash(s) { let h = 2166136261; for (const c of String(s)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
+function makeLook(kind, seed) {
+  const h = hash(seed), k = KIND[kind];
+  return {
+    skin: SKIN[h % SKIN.length], hair: HAIR[(h >>> 3) % HAIR.length], style: (h >>> 6) % 4,
+    acc: ["none", "glasses", "headphones", "cap", "none", "glasses"][(h >>> 9) % 6], cap: CAP[(h >>> 12) % CAP.length],
+    shirt: k.shirt, pants: k.pants, mark: k.mark,
+  };
+}
+const player = {
+  x: 0, y: 0, dir: "down", anim: 0, moving: false, path: [], speed: 72,
+  look: { skin: SKIN[0], hair: "#2b2b2b", style: 0, acc: "crown", shirt: "#23262f", pants: "#23262f", tie: "#d33" },
+};
+const npcs = new Map();   // pid -> npc
+let firstSync = true, serverOffset = 0, host = "";
+const now = () => Date.now() / 1000 + serverOffset;
+
+function followPath(e, dt) {
+  if (!e.path.length) { e.moving = false; return true; }
+  const wp = e.path[0];
+  const tx = wp.px ?? wp.x * T + T / 2, ty = wp.py ?? wp.y * T + 12;
+  const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), step = e.speed * dt;
+  if (d <= step) { e.x = tx; e.y = ty; e.path.shift(); } else { e.x += dx / d * step; e.y += dy / d * step; }
+  if (d > 0.01) e.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+  e.moving = true; e.anim += dt;
+  return !e.path.length;
+}
+
+// ============================================================ 상태 해석
+function idleSecs(s) {
+  const t = s.status_since || s.last_activity;
+  return t ? now() - t : 0;
+}
+function mood(s) {
+  if (s.status === "stopped") return "stopped";
+  if (s.status === "idle") return idleSecs(s) >= SLEEP_AFTER ? "sleep" : "rest";
+  if (s.status === "busy") return "work";
+  return "unknown";
+}
+function ctxPct(s) { return s.ctx_used != null && s.ctx_window ? Math.min(100, s.ctx_used / s.ctx_window * 100) : null; }
+function shortDur(sec) {
+  if (sec == null || !isFinite(sec) || sec < 0) return "";
+  if (sec < 60) return Math.floor(sec) + "초";
+  if (sec < 3600) return Math.floor(sec / 60) + "분";
+  if (sec < 86400) return Math.floor(sec / 3600) + "시간";
+  return Math.floor(sec / 86400) + "일";
+}
+function longDur(sec) {
+  if (sec == null || !isFinite(sec) || sec < 0) return "-";
+  sec = Math.floor(sec);
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+  if (d) return `${d}일 ${h}시간`;
+  if (h) return `${h}시간 ${m}분`;
+  if (m) return `${m}분`;
+  return `${sec}초`;
+}
+function badge(s) {
+  const k = helperBusy(s).length;
+  return badgeBase(s) + (k ? ` 🐣${k}` : "");
+}
+function badgeBase(s) {
+  const m = mood(s), pct = ctxPct(s);
+  const since = s.status_since ? now() - s.status_since : s.elapsed;
+  if (m === "work") {
+    let icon = s.phase === "shell" ? "🛠️" : s.mode === "headless" ? "📦" : "⌨️";
+    if (pct != null && pct >= 80) icon = "🥵";
+    return `${icon} ${shortDur(since)}`;
+  }
+  if (m === "rest") return `☕ ${shortDur(idleSecs(s))}`;
+  if (m === "sleep") return `💤 ${shortDur(idleSecs(s))}`;
+  if (m === "stopped") return "⛔ 정지";
+  return "❓";
+}
+const NICKS = ["민수", "지아", "도윤", "서연", "하준", "유나", "시우", "채원", "준호", "다은", "태오", "소율", "건우", "예린", "현우", "나래"];
+const nicks = new Map();   // pid -> 별명 (현재 쓰는 별명과 겹치지 않게)
+function nickOf(pid) {
+  if (!nicks.has(pid)) {
+    const used = new Set([...nicks].filter(([p]) => npcs.has(p)).map(([, v]) => v));
+    let i = hash(pid) % NICKS.length, tries = 0;
+    while (used.has(NICKS[i]) && tries++ < NICKS.length) i = (i + 1) % NICKS.length;
+    nicks.set(pid, tries > NICKS.length ? `${NICKS[i]}${pid % 100}` : NICKS[i]);
+  }
+  return nicks.get(pid);
+}
+function displayName(s) {
+  if (s.name || s.title) return s.name || s.title;
+  const base = (s.cwd || "").split("/").filter(Boolean).pop();
+  // 샌드박스 외주 작업은 cwd 가 /tmp/work 처럼 겹치므로 PID 로 고정된 별명을 붙인다
+  if (s.mode === "headless" || !base) return `${nickOf(s.pid)} (외주)`;
+  return base;
+}
+function jobTitle(s) {
+  const m = (s.model || "").toLowerCase();
+  let t = m.includes("opus") ? "수석 개발자" : m.includes("sonnet") ? "선임 개발자" : m.includes("haiku") ? "주니어 개발자"
+        : s.kind === "codex" ? "코덱스 엔지니어" : s.kind === "grok" ? "그록 엔지니어" : "개발자";
+  return s.mode === "headless" ? `외주 ${t}` : t;
+}
+const FLAMES = { minimal: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5 };
+const flames = e => e in FLAMES ? "🔥".repeat(FLAMES[e]) || "·" : "";
+
+// ============================================================ 동기화
+let slotOwner = [];   // slot idx -> pid
+function ensureSlot(n) {
+  if (n.slot != null) return;
+  let i = slotOwner.findIndex(p => p == null);
+  if (i < 0 || i >= slots.length) {
+    const used = slotOwner.filter(p => p != null).length, oldH = H;
+    buildWorld(Math.ceil((used + 4) / COLS) * COLS);
+    slotOwner.length = slots.length;
+    i = slotOwner.findIndex(p => p == null);
+    // 책상 줄이 늘면 사장실·출입문 구역이 아래로 밀리므로, 그 구역에 있던 사람도 함께 옮긴다
+    const dy = (H - oldH) * T;
+    for (const e of [player, ...npcs.values()]) {
+      if (e === n || e.y < (oldH - 4) * T || e.x >= 20 * T) continue;
+      e.y += dy; e.path = [];
+      if (e !== player) e.goal = null;   // 다음 프레임에 경로를 다시 계산
+    }
+    if (!walkable(tileOf(player).x, tileOf(player).y)) Object.assign(player, bossSeat, { path: [] });
+  }
+  slotOwner[i] = n.pid; n.slot = i;
+}
+
+function toast(msg) {
+  const el = document.createElement("div");
+  el.className = "toast"; el.textContent = msg;
+  $("toasts").prepend(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+async function sync() {
+  let data;
+  try { data = await (await fetch("/api/sessions", { cache: "no-store" })).json(); }
+  catch { return; }
+  serverOffset = data.now - Date.now() / 1000;
+  host = data.host;
+  const seen = new Set();
+  if (firstSync) {
+    buildWorld(Math.max(8, Math.ceil((data.sessions.length + 2) / COLS) * COLS));
+    slotOwner = new Array(slots.length).fill(null);
+    Object.assign(player, bossSeat);
+  }
+  for (const s of data.sessions) {
+    seen.add(s.pid);
+    let n = npcs.get(s.pid);
+    if (!n) {
+      n = { pid: s.pid, kind: s.kind, look: makeLook(s.kind, s.session_id || s.pid), x: 0, y: 0, dir: "down",
+            anim: Math.random(), moving: false, path: [], speed: 40 + Math.random() * 10, goal: null, wait: 0,
+            alpha: 1, data: s };
+      npcs.set(s.pid, n);
+      ensureSlot(n);
+      if (firstSync) placeAtGoal(n);
+      else {
+        Object.assign(n, { x: (DOOR_X + .5) * T, y: (H - 1) * T + 12 });
+        toast(`🎉 신입 ${KIND[s.kind].label} 「${displayName(s)}」 입사!`);
+        addLog(s, `🎉 ${jobTitle(s)}(으)로 입사했습니다! (${s.model || "모델 미상"})`);
+      }
+    }
+    detectActivity(n, s);
+    if (n.data && n.data.status !== s.status && !firstSync) {
+      if (mood(s) === "work") addLog(s, "⌨️ 업무를 시작했습니다.");
+      else if (s.status === "idle") addLog(s, "☕ 일을 마치고 쉬러 갑니다.");
+    }
+    n.data = s;
+    syncHelpers(n, s);
+  }
+  for (const n of npcs.values()) {
+    if (!seen.has(n.pid) && !n.leaving) {
+      n.leaving = true;
+      toast(`👋 「${displayName(n.data)}」 퇴근합니다`);
+      addLog(n.data, `👋 퇴근했습니다. (근무 ${longDur(n.data.elapsed)})`);
+    }
+  }
+  if (!$("modal").hidden && modalKind === "staff") renderStaff();
+  renderSide();
+  firstSync = false;
+  updateHud();
+}
+
+// ============================================================ 사내 소식 & 성과 팝업
+const logs = [];
+const popups = [];
+function addLog(s, text) {
+  logs.push({ at: new Date(), s, text });
+  if (logs.length > 40) logs.shift();
+  renderLog();
+}
+function renderLog() {
+  const box = $("logLines");
+  const rows = logs.slice(innerWidth < 640 ? -2 : -3);
+  if (!rows.length) {
+    box.innerHTML = `<div>🏢 오늘도 좋은 하루! 직원을 탭하거나 다가가서 Space를 누르면 업무 보고를 받을 수 있어요.</div>`;
+    return;
+  }
+  box.innerHTML = rows.map(r => `<div><span class="tm">${r.at.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>`
+    + `<span class="nm" style="color:${KIND[r.s.kind].color === "#3a3f4b" ? "#3a3f4b" : KIND[r.s.kind].color}">${esc(displayName(r.s))}</span> ${esc(r.text)}</div>`).join("");
+}
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const actKey = a => a ? `${a.t}|${a.text}` : "";
+function detectActivity(n, s) {
+  const acts = s.activity || [];
+  const last = actKey(acts[acts.length - 1]);
+  if (n.lastAct === undefined || firstSync) { n.lastAct = last; return; }
+  if (last === n.lastAct) return;
+  const idx = acts.findIndex(a => actKey(a) === n.lastAct);
+  const fresh = (idx >= 0 ? acts.slice(idx + 1) : acts.slice(-1)).slice(-3);
+  n.lastAct = last;
+  const base = performance.now() / 1000;
+  fresh.forEach((a, i) => {
+    const label = a.kind === "tool" ? "+🛠 " + a.text.split(":")[0].replace(/^mcp__\w+?__/, "") : "+💬 보고";
+    popups.push({ n, text: label.length > 18 ? label.slice(0, 17) + "…" : label, kind: a.kind, t0: base + i * .7 });
+    addLog(s, `${a.kind === "tool" ? "🛠" : "💬"} ${a.text}`);
+  });
+}
+
+function goalOf(n) {
+  if (n.leaving) return "door";
+  return mood(n.data) === "rest" ? "lounge" : "seat";
+}
+function seatPos(n) { const s = slots[n.slot]; return { x: (s.dx + 1) * T, y: s.seatY * T + 12 }; }
+function placeAtGoal(n) {
+  n.goal = goalOf(n);
+  if (n.goal === "seat") { Object.assign(n, seatPos(n)); n.dir = "down"; }
+  else { const t = loungeTiles[Math.floor(Math.random() * loungeTiles.length)]; n.x = t.x * T + 8; n.y = t.y * T + 12; n.wait = Math.random() * 5; }
+}
+function planPath(n) {
+  const st = tileOf(n);
+  if (n.goal === "seat") {
+    const s = slots[n.slot], p = findPath(st.x, st.y, s.dx, s.seatY);
+    n.path = p ? [...p, { px: (s.dx + 1) * T, py: s.seatY * T + 12 }] : [{ px: (s.dx + 1) * T, py: s.seatY * T + 12 }];
+  } else if (n.goal === "lounge") {
+    const t = loungeTiles[Math.floor(Math.random() * loungeTiles.length)];
+    n.path = findPath(st.x, st.y, t.x, t.y) || [];
+    n.wait = 3 + Math.random() * 7;
+  } else {
+    n.path = [...(findPath(st.x, st.y, DOOR_X, H - 1) || []), { px: (DOOR_X + .5) * T, py: H * T + 6 }];
+  }
+}
+
+function updateNpc(n, dt) {
+  const g = goalOf(n);
+  if (g !== n.goal) { n.goal = g; planPath(n); }
+  if (dlg && dlg.npc === n) {          // 대화 중엔 멈춰서 사장님을 바라본다
+    n.moving = false;
+    if (n.goal !== "seat" || n.path.length) n.dir = faceTo(n, player);
+    return;
+  }
+  if (n.path.length) { followPath(n, dt); return; }
+  n.moving = false;
+  if (n.goal === "seat") n.dir = "down";
+  else if (n.goal === "lounge") { n.wait -= dt; if (n.wait <= 0) planPath(n); }
+  else if (n.goal === "door") {
+    n.alpha -= dt * 2;
+    if (n.alpha <= 0) { npcs.delete(n.pid); slotOwner[n.slot] = null; updateHud(); }
+  }
+  n.anim += dt;
+}
+function faceTo(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+}
+const seated = n => n.goal === "seat" && !n.path.length && !n.leaving;
+
+// ============================================================ 서브에이전트 → 인턴
+const HELPER_MAX = 2;                       // 직원 한 명 곁에 보이는 인턴 수 (나머지는 배지 숫자로만)
+const helperBusy = s => (s.subagents || []).filter(a => a.status === "busy");
+function helperName(a) {
+  const t = String(a.name || a.type || "인턴").replace(/^\[[^\]]*\]\s*/, "");
+  return t.length > 14 ? t.slice(0, 13) + "…" : t;
+}
+function syncHelpers(n, s) {
+  n.helpers = n.helpers || new Map();
+  const live = helperBusy(s), ids = new Set(live.map(a => a.id));
+  for (const a of live) {
+    let h = n.helpers.get(a.id);
+    if (!h) {
+      const used = new Set([...n.helpers.values()].filter(o => !o.leaving).map(o => o.idx));
+      let idx = 0;
+      while (used.has(idx)) idx++;
+      const look = makeLook(n.kind, (s.session_id || n.pid) + ":" + a.id);
+      Object.assign(look, { acc: "cap", cap: "#f5c542" });   // 노란 모자 = 인턴
+      h = { id: a.id, parent: n, idx, x: n.x, y: n.y, dir: "down", anim: Math.random(), moving: false,
+            alpha: firstSync ? 1 : 0, snap: firstSync, look, data: a };
+      n.helpers.set(a.id, h);
+      if (!firstSync) addLog(s, `🐣 인턴 「${helperName(a)}」에게 일을 나눠 맡겼습니다.`);
+    }
+    h.data = a;
+  }
+  for (const h of n.helpers.values())
+    if (!ids.has(h.id) && !h.leaving) {
+      h.leaving = true;
+      if (!firstSync) addLog(s, `✅ 인턴 「${helperName(h.data)}」이(가) 맡은 일을 끝냈습니다.`);
+    }
+}
+function updateHelpers(n, dt) {
+  if (!n.helpers) return;
+  for (const h of [...n.helpers.values()]) {
+    if (h.leaving || n.leaving) { h.alpha -= dt * 1.5; if (h.alpha <= 0) n.helpers.delete(h.id); continue; }
+    h.alpha = Math.min(1, h.alpha + dt * 2);
+    if (h.idx >= HELPER_MAX) continue;
+    const tg = { x: n.x + (h.idx % 2 ? -22 : 22), y: n.y };   // 책상 양옆에 선다
+    if (h.snap) { Object.assign(h, tg); h.snap = false; }
+    h.anim += dt;
+    if (dlg && dlg.npc === h) { h.moving = false; h.dir = faceTo(h, player); continue; }
+    const dx = tg.x - h.x, dy = tg.y - h.y, d = Math.hypot(dx, dy);
+    if (d > 1) {
+      const st = Math.min(d, 60 * dt);
+      h.x += dx / d * st; h.y += dy / d * st; h.moving = true;
+      h.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+    } else { h.moving = false; h.dir = "down"; }
+  }
+}
+const shownHelpers = n => n.helpers ? [...n.helpers.values()].filter(h => h.idx < HELPER_MAX) : [];
+function drawHelper(h, t) {
+  ctx.globalAlpha = Math.max(0, Math.min(h.alpha, h.parent.alpha));
+  const talking = dlg && dlg.npc === h, work = !h.moving && !talking;
+  drawChar(ctx, h.x, h.y, h.look, { dir: h.dir, anim: h.anim, moving: h.moving, typing: work, talking: talking && Math.floor(t * 6) % 2 });
+  if (work) {   // 노트북을 들고 서서 일한다
+    px(h.x - 6, h.y - 8, 12, 2, "#9aa1ab"); px(h.x - 5, h.y - 15, 10, 7, "#cfd4dc");
+    px(h.x - 1, h.y - 13, 3, 3, KIND[h.parent.kind].logo);
+    ctx.fillStyle = `rgba(150,220,255,${.25 + .15 * Math.sin(t * 7 + h.idx)})`; ctx.fillRect(h.x - 6, h.y - 17, 12, 2);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawHelperLabel(h, t) {   // 이름은 탭해서 대화창으로 본다 (라벨이 겹치지 않게 아이콘만)
+  const top = worldToScreen(h.x, h.y - 27);
+  ctx.globalAlpha = Math.max(0, Math.min(h.alpha, h.parent.alpha));
+  pill(top.x, top.y - 8 + Math.sin(t * 4 + h.idx) * 1.2, "🐣", "#fff3b0", "#3a2a1a", 10);
+  ctx.globalAlpha = 1;
+}
+function helperPages(h) {
+  const a = h.data, k = h.parent.kind, boss = displayName(h.parent.data), nm = helperName(a);
+  const pct = a.ctx_used != null && a.ctx_window ? Math.min(100, a.ctx_used / a.ctx_window * 100) : null;
+  const pages = [say(k, {
+    claude: `안녕하세요 사장님! ${boss} 선배를 돕고 있는 인턴 「${nm}」입니다 🐣\n지금 ${longDur(now() - a.started)}째 맡은 일을 하고 있어요.`,
+    codex: `인턴 「${nm}」, 보고드립니다.\n${boss} 담당 하위 작업 수행 중. 경과 ${longDur(now() - a.started)}.`,
+    grok: `헉 사장님?! 저 ${boss} 선배 밑 알바 「${nm}」예요 🐣\n${longDur(now() - a.started)}째 열일 중!` })];
+  pages.push(a.task ? say(k, { claude: `선배가 맡긴 일이에요:\n「${a.task}」`, codex: `하위 작업 지시:\n「${a.task}」`, grok: `받은 미션은요~\n「${a.task}」` })
+                    : say(k, { claude: "맡은 일 내용은 기록에서 찾지 못했어요 (암호화돼 있어요) 🤫", codex: "지시 내용: 확인 불가(암호화).", grok: "미션 내용은 비밀이래요 🤐" }));
+  const acts = (a.activity || []).slice(-4);
+  if (acts.length) pages.push(say(k, { claude: "최근에 한 일이에요:", codex: "최근 수행 내역:", grok: "방금까지 한 거!" }) + "\n"
+    + acts.map(x => `${x.kind === "tool" ? "🛠" : "💬"} ${x.text}${x.t ? ` (${shortDur(now() - x.t)} 전)` : ""}`).join("\n"));
+  pages.push(`🧠 모델 ${a.model || "?"} · 추론 ${a.effort || "?"} ${flames(a.effort)}\n`
+    + (pct != null ? `😵 피로도(컨텍스트) ${pct.toFixed(1)}% — ${tok(a.ctx_used)} / ${tok(a.ctx_window)}\n` : "😵 피로도(컨텍스트) 측정 불가\n")
+    + `🛠 도구 사용 ${a.tools ?? "?"}회 · 근무 ${longDur(now() - a.started)}${a.type ? ` · 유형 ${a.type}` : ""}`);
+  return pages;
+}
+
+function updateHud() {
+  const list = [...npcs.values()].filter(n => !n.leaving).map(n => n.data);
+  $("co").textContent = `🏢 ${(host || "AI").toUpperCase()} 스튜디오`;
+  const cost = list.reduce((a, s) => a + (s.cost_usd || 0), 0);
+  $("sC").textContent = cost ? `$${cost.toFixed(2)}` : "-";
+  $("sN").textContent = list.length;
+  $("sB").textContent = list.filter(s => mood(s) === "work").length;
+  $("sI").textContent = list.filter(s => mood(s) === "rest").length;
+  $("sS").textContent = list.filter(s => mood(s) === "sleep").length;
+}
+
+// ============================================================ 입력
+const keys = new Set();
+addEventListener("keydown", e => {
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
+  if (!$("modal").hidden) { if (e.key === "Escape") closeModal(); return; }
+  if (e.key === " " || e.key === "Enter" || e.key === "e" || e.key === "E") { interact(); return; }
+  if (e.key === "Escape") { closeDialog(); return; }
+  keys.add(e.key.toLowerCase());
+});
+addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
+addEventListener("blur", () => keys.clear());
+
+let talkTarget = null;
+cv.addEventListener("pointerdown", e => {
+  if (dlg) { advanceDialog(); return; }
+  const w = screenToWorld(e.clientX, e.clientY);
+  // 머리 위 라벨까지 포함해 직원을 탭했는지 확인
+  const labelH = 46 / view.scale;
+  let hit = null, best = 1e9;
+  for (const n of npcs.values()) {
+    if (n.leaving) continue;
+    if (Math.abs(w.x - n.x) < 12 && w.y > n.y - 26 - labelH && w.y < n.y + 3) {
+      const d = Math.abs(w.y - (n.y - 12));
+      if (d < best) { best = d; hit = n; }
+    }
+    for (const h of shownHelpers(n))   // 인턴은 몸통만 (라벨이 작아서)
+      if (!h.leaving && Math.abs(w.x - h.x) < 8 && w.y > h.y - 34 && w.y < h.y + 3) {
+        const d = Math.abs(w.y - (h.y - 12)) - 4;
+        if (d < best) { best = d; hit = h; }
+      }
+  }
+  const pt = tileOf(player);
+  if (hit) {
+    talkTarget = hit;
+    if (dist(player, hit) < 24) { openDialog(hit); return; }
+    const tt = tileOf(hit);
+    player.path = findPath(pt.x, pt.y, tt.x, tt.y) || [];
+    if (!player.path.length && hit.parent) { openDialog(hit); talkTarget = null; }
+    return;
+  }
+  talkTarget = null;
+  const tx = Math.floor(w.x / T), ty = Math.floor(w.y / T);
+  if (walkable(tx, ty) && ty < H - 1) player.path = findPath(pt.x, pt.y, tx, ty) || [];
+});
+$("dlg").addEventListener("pointerdown", e => { e.stopPropagation(); advanceDialog(); });
+
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function nearestNpc(maxD = 24) {
+  let best = null, bd = maxD;
+  for (const n of npcs.values()) {
+    if (n.leaving) continue;
+    const d = dist(player, n);
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+function interact() {
+  if (dlg) { advanceDialog(); return; }
+  const n = nearestNpc();
+  if (n) openDialog(n);
+}
+
+function updatePlayer(dt) {
+  if (dlg) { player.moving = false; return; }
+  let vx = 0, vy = 0;
+  if (keys.has("arrowleft") || keys.has("a")) vx -= 1;
+  if (keys.has("arrowright") || keys.has("d")) vx += 1;
+  if (keys.has("arrowup") || keys.has("w")) vy -= 1;
+  if (keys.has("arrowdown") || keys.has("s")) vy += 1;
+  if (vx || vy) {
+    player.path = []; talkTarget = null;
+    const l = Math.hypot(vx, vy), step = player.speed * dt;
+    moveBy(player, vx / l * step, 0);
+    moveBy(player, 0, vy / l * step);
+    player.dir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : (vy > 0 ? "down" : "up");
+    player.moving = true; player.anim += dt;
+    return;
+  }
+  if (player.path.length) {
+    if (talkTarget && dist(player, talkTarget) < 22) { player.path = []; openDialog(talkTarget); talkTarget = null; return; }
+    followPath(player, dt);
+    if (!player.path.length && talkTarget && dist(player, talkTarget) < 30) { openDialog(talkTarget); talkTarget = null; }
+    return;
+  }
+  player.moving = false;
+}
+function blocked(x, y) {
+  for (const [ox, oy] of [[-4, -3], [4, -3], [-4, 0], [4, 0]]) {
+    const tx = Math.floor((x + ox) / T), ty = Math.floor((y + oy) / T);
+    if (!walkable(tx, ty) || ty >= H - 1) return true;
+  }
+  return false;
+}
+function moveBy(e, dx, dy) { if (!blocked(e.x + dx, e.y + dy)) { e.x += dx; e.y += dy; } }
+
+// ============================================================ 대화
+let dlg = null;
+function say(kind, v) { return v[kind] || v.claude; }
+function makePages(s) {
+  const k = s.kind, name = displayName(s), m = mood(s), pct = ctxPct(s);
+  const since = longDur(s.status_since ? now() - s.status_since : s.elapsed);
+  const idle = longDur(idleSecs(s));
+  const pages = [];
+
+  let p1 = say(k, {
+    claude: `사장님, 안녕하세요! ${name}입니다 🙂\n`,
+    codex: `${name}, 보고드립니다.\n`,
+    grok: `오 사장님 ㅎㅎ ${name}예요~\n`,
+  });
+  if (m === "work") p1 += s.phase === "shell"
+    ? say(k, { claude: `지금 터미널에서 명령을 돌리고 결과를 기다리는 중이에요. (${since}째)`,
+               codex: `현재 셸 명령 실행 중. 경과 ${since}.`,
+               grok: `터미널 돌려놓고 결과 기다리는 중! ${since}째예요 ⏳` })
+    : say(k, { claude: `지금 열심히 작업하고 있어요! 이 일을 붙잡은 지 ${since} 됐어요.`,
+               codex: `작업 진행 중. 경과 ${since}.`,
+               grok: `지금 완전 몰입 중이에요 🔥 ${since}째 달리는 중!` });
+  else if (m === "rest") p1 += say(k, {
+    claude: `지금은 다음 지시를 기다리고 있어요. 마지막 보고 후 ${idle}째 대기 중이에요 ☕`,
+    codex: `대기 중. ${idle} 경과. 다음 지시 바랍니다.`,
+    grok: `할 게 없어서 커피 마시는 중 ☕ ${idle}째요~` });
+  else if (m === "sleep") p1 += say(k, {
+    claude: `…쿨… 앗, 사장님! 조, 졸던 거 아니에요! ${idle}째 새 지시가 없어서 잠깐 눈만 감고 있었어요…`,
+    codex: `(…) 장시간 대기 상태. ${idle} 경과. 지시 없음.`,
+    grok: `zzZ… 헉 사장님?! ${idle}째 놀고 있었… 아니 대기 중이었어요!` });
+  else if (m === "stopped") p1 += say(k, { claude: "저… 지금 일시정지 상태예요. 터미널에서 깨워 주세요!", codex: "프로세스 정지 상태(SIGSTOP).", grok: "얼음! 상태예요 🧊 누가 멈춰놨어요" });
+  else p1 += say(k, { claude: "제 상태 기록을 못 찾겠어요. 일은 하고 있는 것 같은데…", codex: "상태 기록 없음.", grok: "음… 저도 제가 뭐 하는지 모르겠어요 ㅋㅋ" });
+  if (s.mode === "headless") p1 += say(k, {
+    claude: "\n(저는 이번 일만 처리하고 퇴근하는 단기 외주예요!)",
+    codex: "\n※ 단발성 외주 작업(exec).", grok: "\n(전 이번 건만 하고 빠지는 용병이에요 😎)" });
+  pages.push(p1);
+
+  const subs = helperBusy(s);
+  if (subs.length) pages.push(say(k, {
+    claude: `지금 인턴 ${subs.length}명에게 일을 나눠 맡겼어요:`,
+    codex: `서브에이전트 ${subs.length}개 가동 중:`,
+    grok: `알바생 ${subs.length}명 굴리는 중이에요 😎` }) + "\n"
+    + subs.slice(0, 5).map(a => `🐣 ${helperName(a)} — ${a.model || "?"} · ${shortDur(now() - a.started)}째`).join("\n")
+    + (subs.length > 5 ? `\n… 외 ${subs.length - 5}명` : ""));
+
+  if (s.task) pages.push(say(k, {
+    claude: `제가 맡은 일은 이거예요:\n「${s.task}」`,
+    codex: `지시사항:\n「${s.task}」`,
+    grok: `받은 미션은요~\n「${s.task}」` }));
+  else pages.push(say(k, {
+    claude: "이번 일은 기록을 남기지 않는 비밀 임무라 자세히는 말씀 못 드려요 🤫",
+    codex: "지시사항: 기록 없음(ephemeral).", grok: "극비 미션이라 말 못 해요 🤐 (진짜 기록이 없어요)" }));
+
+  const acts = (s.activity || []).slice(-4);
+  if (acts.length) {
+    const head = say(k, { claude: "최근에 한 일이에요:", codex: "최근 수행 내역:", grok: "방금까지 한 거!" });
+    const lines = acts.map(a => `${a.kind === "tool" ? "🛠" : "💬"} ${a.text}${a.t ? ` (${shortDur(now() - a.t)} 전)` : ""}`);
+    pages.push(head + "\n" + lines.join("\n"));
+  }
+
+  let p4 = `🧠 모델 ${s.model || "?"} · 추론 ${s.effort || "?"} ${flames(s.effort)}\n`;
+  p4 += pct != null ? `😵 피로도(컨텍스트) ${pct.toFixed(1)}% — ${tok(s.ctx_used)} / ${tok(s.ctx_window)}\n` : "😵 피로도(컨텍스트) 측정 불가\n";
+  p4 += `⏱️ 근무 ${longDur(s.elapsed)} · CPU ${s.cpu}% · 메모리 ${(s.rss / 1048576).toFixed(0)}MB`;
+  if (s.cost_usd) p4 += ` · 💰 $${s.cost_usd.toFixed(2)}`;
+  p4 += "\n";
+  if (pct == null) p4 += "";
+  else if (pct >= 80) p4 += say(k, { claude: "머리가 꽉 찼어요… 곧 정리(compact)가 필요할 것 같아요 😵‍💫", codex: "경고: 컨텍스트 여유 부족.", grok: "뇌 용량 거의 바닥이에요 🫠 곧 리셋 각!" });
+  else if (pct >= 50) p4 += say(k, { claude: "슬슬 머리가 무거워지기 시작했어요.", codex: "컨텍스트 절반 이상 사용.", grok: "슬슬 머리가 뜨끈뜨끈~" });
+  else p4 += say(k, { claude: "아직 쌩쌩해요! 💪", codex: "컨텍스트 여유 충분.", grok: "아직 팔팔해요 ✌️" });
+  pages.push(p4);
+  return pages;
+}
+const tok = n => n == null ? "-" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
+
+function openDialog(n) {
+  if (n.parent) return openHelperDialog(n);
+  const s = n.data;
+  dlg = { npc: n, pages: makePages(s), page: 0, shown: 0 };
+  $("dName").textContent = displayName(s);
+  $("dKind").textContent = KIND[s.kind].label;
+  $("dKind").style.background = KIND[s.kind].color;
+  $("dRole").textContent = `${jobTitle(s)} · PID ${s.pid}${s.tty ? " · " + s.tty : ""}`;
+  const pc = $("portrait"), pctx = pc.getContext("2d");
+  pctx.clearRect(0, 0, pc.width, pc.height);
+  drawChar(pctx, 14, 27, n.look, { dir: "down", talking: true, noShadow: true });
+  $("dlg").hidden = false;
+  $("hint").hidden = true;
+  renderDialogText();
+}
+function openHelperDialog(h) {
+  const a = h.data, n = h.parent;
+  dlg = { npc: h, pages: helperPages(h), page: 0, shown: 0 };
+  $("dName").textContent = `🐣 ${helperName(a)}`;
+  $("dKind").textContent = KIND[n.kind].label;
+  $("dKind").style.background = KIND[n.kind].color;
+  $("dRole").textContent = `인턴 · ${displayName(n.data)} 소속`;
+  const pc = $("portrait"), pctx = pc.getContext("2d");
+  pctx.clearRect(0, 0, pc.width, pc.height);
+  drawChar(pctx, 14, 27, h.look, { dir: "down", talking: true, noShadow: true });
+  $("dlg").hidden = false;
+  $("hint").hidden = true;
+  renderDialogText();
+}
+function renderDialogText() {
+  const full = dlg.pages[dlg.page];
+  $("dText").textContent = full.slice(0, Math.floor(dlg.shown));
+  $("dPage").textContent = `${dlg.page + 1} / ${dlg.pages.length}`;
+  $("dNext").style.visibility = dlg.shown >= full.length ? "visible" : "hidden";
+  $("dNext").textContent = dlg.page === dlg.pages.length - 1 ? "■ 닫기" : "▼ Space / 탭";
+}
+function advanceDialog() {
+  if (!dlg) return;
+  const full = dlg.pages[dlg.page];
+  if (dlg.shown < full.length) dlg.shown = full.length;
+  else if (dlg.page < dlg.pages.length - 1) { dlg.page++; dlg.shown = 0; }
+  else { closeDialog(); return; }
+  renderDialogText();
+}
+function closeDialog() { dlg = null; $("dlg").hidden = true; $("hint").hidden = false; }
+
+// ============================================================ 그리기: 캐릭터
+function drawChar(c, x, y, L, o = {}) {
+  const dir = o.dir || "down", f = Math.floor((o.anim || 0) * 8);
+  const L0 = Math.round(x) - 7, T0 = Math.round(y) - 24;
+  const P = (dx, dy, w, h, col) => { c.fillStyle = col; c.fillRect(L0 + dx, T0 + dy, w, h); };
+  if (!o.noShadow) {
+    c.fillStyle = "rgba(0,0,0,.18)"; c.beginPath(); c.ellipse(Math.round(x), Math.round(y), 6, 2, 0, 0, 7); c.fill();
+  }
+  // 다리
+  if (!o.sit) {
+    const a = o.moving ? f % 2 : 0, b = o.moving ? 1 - a : 0;
+    P(4, 20 - a, 3, 4, L.pants); P(8, 20 - b, 3, 4, L.pants);
+    P(4, 23 - a, 3, 1, "#2b2b2b"); P(8, 23 - b, 3, 1, "#2b2b2b");
+  }
+  // 몸통
+  P(3, 13, 9, 8, L.shirt);
+  if (L.tie && dir === "down") { P(6, 13, 3, 1, "#fff"); P(7, 14, 1, 5, L.tie); }
+  if (L.mark && dir === "down") { P(6, 15, 3, 3, L.mark); P(7, 16, 1, 1, L.shirt); }
+  // 팔
+  if (o.typing) {
+    P(1, 14, 2, 4, L.shirt); P(12, 14, 2, 4, L.shirt);
+    P(2, 18 - (f % 2), 2, 2, L.skin); P(11, 18 - ((f + 1) % 2), 2, 2, L.skin);
+  } else {
+    P(1, 14, 2, 6, L.shirt); P(12, 14, 2, 6, L.shirt);
+    P(1, 20, 2, 1, L.skin); P(12, 20, 2, 1, L.skin);
+    if (o.mug) { P(13, 17, 3, 3, "#fff"); P(16, 18, 1, 1, "#fff"); P(13, 17, 3, 1, "#7a4a2a"); }
+  }
+  // 머리 (졸 때는 고개를 숙인다)
+  const hy = o.sleep ? 2 : 0;
+  const H_ = (dx, dy, w, h, col) => P(dx, dy + hy, w, h, col);
+  H_(2, 1, 11, 12, L.skin); H_(1, 2, 13, 10, L.skin);
+  const hair = L.hair;
+  if (dir === "up") {
+    H_(1, 0, 13, 12, hair); H_(2, -1, 11, 1, hair);
+  } else {
+    H_(1, 0, 13, 4, hair); H_(2, -1, 11, 1, hair);
+    if (dir === "down") { H_(1, 4, 2, 4, hair); H_(12, 4, 2, 4, hair); }
+    if (dir === "left") H_(8, 4, 6, 6, hair);
+    if (dir === "right") H_(1, 4, 6, 6, hair);
+  }
+  if (L.style === 1) { H_(3, -3, 2, 2, hair); H_(7, -3, 2, 2, hair); H_(11, -2, 2, 2, hair); }
+  if (L.style === 2 && dir !== "up") { H_(0, 4, 2, 9, hair); H_(13, 4, 2, 9, hair); }
+  if (L.style === 2 && dir === "up") H_(1, 12, 13, 2, hair);
+  if (L.style === 3) H_(5, -4, 5, 4, hair);
+  // 얼굴
+  const eye = "#2b2b2b";
+  const eyes = xs => xs.forEach(ex => o.sleep ? H_(ex, 8, 2, 1, eye) : H_(ex, 7, 2, 2, eye));
+  if (dir === "down") {
+    eyes([4, 9]);
+    H_(3, 10, 2, 1, "#f4a6a6"); H_(10, 10, 2, 1, "#f4a6a6");
+    if (o.talking) H_(7, 10, 2, 1, "#a33");
+  } else if (dir === "left") { eyes([3]); H_(2, 10, 2, 1, "#f4a6a6"); }
+  else if (dir === "right") { eyes([10]); H_(11, 10, 2, 1, "#f4a6a6"); }
+  // 액세서리
+  if (L.acc === "glasses" && dir === "down") {
+    for (const gx of [3, 8]) { H_(gx, 6, 4, 1, "#222"); H_(gx, 9, 4, 1, "#222"); H_(gx, 6, 1, 4, "#222"); H_(gx + 3, 6, 1, 4, "#222"); }
+    H_(7, 7, 1, 1, "#222");
+  }
+  if (L.acc === "headphones") {
+    H_(1, -2, 13, 2, "#333");
+    if (dir !== "right") H_(0, 4, 2, 5, "#e23d3d");
+    if (dir !== "left") H_(13, 4, 2, 5, "#e23d3d");
+  }
+  if (L.acc === "cap") {
+    H_(1, -2, 13, 4, L.cap);
+    if (dir === "down") H_(0, 2, 15, 1, "rgba(0,0,0,.35)");
+    if (dir === "left") H_(-2, 2, 6, 1, L.cap);
+    if (dir === "right") H_(11, 2, 6, 1, L.cap);
+  }
+  if (L.acc === "crown") {
+    H_(4, -4, 7, 3, "#f5c542"); H_(4, -6, 1, 2, "#f5c542"); H_(7, -6, 1, 2, "#f5c542"); H_(10, -6, 1, 2, "#f5c542");
+    H_(7, -3, 1, 1, "#e63946");
+  }
+}
+
+// ============================================================ 그리기: 사무실
+function px(x, y, w, h, col) { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); }
+function skyColor(h) {
+  if (h >= 7 && h < 17) return ["#8ecdf7", "#bfe3fb"];
+  if (h >= 17 && h < 19) return ["#f6a96b", "#f9d29b"];
+  if (h >= 5 && h < 7) return ["#f3b6c8", "#bfe3fb"];
+  return ["#1e2a4a", "#2c3b63"];
+}
+function drawRoom(t) {
+  const date = new Date(), hr = date.getHours();
+  // 바닥
+  for (let y = 3; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const lounge = x >= 20 && x <= 25 && y >= 4;
+    if (lounge) { px(x * T, y * T, T, T, (x + y) % 2 ? "#a7cbb5" : "#9fc4ad"); continue; }
+    px(x * T, y * T, T, T, y % 2 ? "#d9bb8f" : "#d3b487");
+    px(x * T + ((y * 7) % 16), y * T, 1, T, "rgba(120,80,40,.18)");
+    px(x * T, y * T + T - 1, T, 1, "rgba(120,80,40,.12)");
+  }
+  // 휴게실 러그 테두리, 사장실 카펫
+  ctx.strokeStyle = "#7fa58e"; ctx.lineWidth = 1; ctx.strokeRect(20 * T + .5, 4 * T + .5, 6 * T - 1, (H - 5) * T - 1);
+  px(1 * T + 4, (H - 4) * T, 5 * T - 8, 3 * T - 4, "#b85c5c"); px(1 * T + 7, (H - 4) * T + 3, 5 * T - 14, 3 * T - 10, "#c46b6b");
+  // 위쪽 벽
+  px(0, 0, W * T, 3 * T, "#efe6d6"); px(0, 0, W * T, 5, "#5c4b3b"); px(0, 3 * T - 4, W * T, 4, "#a08870");
+  for (let x = 0; x < W; x++) px(x * T, 6, 1, 3 * T - 10, "rgba(0,0,0,.03)");
+  const [sky1, sky2] = skyColor(hr);
+  const night = hr < 5 || hr >= 19;
+  for (const wx of [2, 6, 21]) {
+    const X = wx * T + 2, Y = 10, w = 2 * T - 4, h = 2 * T - 8;
+    px(X - 2, Y - 2, w + 4, h + 4, "#7a6450");
+    const g = ctx.createLinearGradient(0, Y, 0, Y + h); g.addColorStop(0, sky1); g.addColorStop(1, sky2);
+    ctx.fillStyle = g; ctx.fillRect(X, Y, w, h);
+    if (night) { for (let i = 0; i < 5; i++) px(X + (hash(wx * 9 + i) % w), Y + (hash(wx + i * 31) % (h - 4)), 1, 1, "#fff"); px(X + w - 7, Y + 3, 4, 4, "#f6f1c7"); }
+    else { px(X + 4 + (t * 2 + wx * 13) % (w - 6), Y + 5, 6, 2, "#fff"); px(X + 5 + (t * 2 + wx * 13) % (w - 6), Y + 4, 4, 1, "#fff"); }
+    px(X + w / 2 - 1, Y, 2, h, "#7a6450"); px(X, Y + h / 2 - 1, w, 2, "#7a6450");
+  }
+  // 회사 간판
+  px(9 * T + 4, 12, 5 * T - 8, 18, "#2a2418"); px(9 * T + 6, 14, 5 * T - 12, 14, "#f5c542");
+  ctx.fillStyle = "#2a2418"; ctx.font = "bold 8px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(`${(host || "AI").toUpperCase()} STUDIO`, 11.5 * T, 21.5, 5 * T - 16);
+  // 화이트보드
+  px(15 * T, 9, 3 * T, 2 * T - 4, "#9aa3ad"); px(15 * T + 2, 11, 3 * T - 4, 2 * T - 8, "#fbfbfb");
+  ctx.strokeStyle = "#e63946"; ctx.beginPath(); ctx.moveTo(15 * T + 6, 30); ctx.lineTo(15 * T + 14, 22); ctx.lineTo(15 * T + 22, 26); ctx.lineTo(15 * T + 34, 16); ctx.stroke();
+  px(15 * T + 6, 14, 14, 1, "#4f7cf0"); px(15 * T + 6, 17, 10, 1, "#4f7cf0"); px(17 * T - 2, 30, 10, 2, "#d97757");
+  // 시계 (실제 시간)
+  const cx = 19 * T + 8, cy = 22;
+  ctx.fillStyle = "#5c4b3b"; ctx.beginPath(); ctx.arc(cx, cy, 9, 0, 7); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(cx, cy, 7.5, 0, 7); ctx.fill();
+  const hand = (ang, len, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(ang) * len, cy - Math.cos(ang) * len); ctx.stroke(); };
+  const mi = date.getMinutes() + date.getSeconds() / 60;
+  hand((hr % 12 + mi / 60) / 12 * Math.PI * 2, 4, "#222", 1.5); hand(mi / 60 * Math.PI * 2, 6, "#222", 1); hand(date.getSeconds() / 60 * Math.PI * 2, 6.5, "#e63946", .5);
+  ctx.lineWidth = 1;
+  // 포스터
+  px(24 * T + 2, 10, 20, 26, "#264653"); px(24 * T + 5, 14, 14, 10, "#f4a261"); px(24 * T + 5, 27, 14, 2, "#e9c46a"); px(24 * T + 5, 31, 9, 2, "#e9c46a");
+  // 좌우 벽, 아래 벽, 출입문
+  px(0, 0, T, H * T, "#5c4b3b"); px((W - 1) * T, 0, T, H * T, "#5c4b3b");
+  px(0, (H - 1) * T, W * T, T, "#5c4b3b");
+  px(DOOR_X * T, (H - 1) * T, 2 * T, T, "#8b6b4a"); px(DOOR_X * T + 2, (H - 1) * T + 2, 2 * T - 4, T - 4, "#a7835c");
+  px(DOOR_X * T, (H - 2) * T + 6, 2 * T, 10, "#6d4c41"); ctx.fillStyle = "#e8d5b5"; ctx.font = "bold 5px sans-serif";
+  ctx.fillText("WELCOME", (DOOR_X + 1) * T, (H - 2) * T + 11.5);
+  // 의자 (사람 뒤에 그려지므로 바닥 레이어)
+  for (const s of slots) { const X = (s.dx + 1) * T; px(X - 7, s.seatY * T - 6, 14, 13, "#4a5568"); px(X - 6, s.seatY * T - 5, 12, 2, "#5a6578"); }
+  px(3.5 * T - 8, (H - 4) * T - 8, 16, 16, "#7b2d26"); px(3.5 * T - 7, (H - 4) * T - 7, 14, 3, "#9b3d34");
+}
+
+function drawDesk(s, owner, t) {
+  const x0 = s.dx * T, y0 = s.deskY * T, cx = x0 + T;
+  px(x0 + 1, y0 - 6, 30, 11, "#c08a5a"); px(x0 + 1, y0 - 6, 30, 1, "#d9a273");
+  px(x0 + 1, y0 + 5, 30, 8, "#9a6a42"); px(x0 + 3, y0 + 13, 2, 3, "#6b4a2f"); px(x0 + 27, y0 + 13, 2, 3, "#6b4a2f");
+  // 노트북 뒷면 (로고 색 = 소속)
+  const busy = owner && mood(owner.data) === "work" && seated(owner);
+  if (busy) { ctx.fillStyle = `rgba(150,220,255,${.25 + .15 * Math.sin(t * 6 + s.idx)})`; ctx.fillRect(cx - 8, y0 - 12, 16, 3); }
+  px(cx - 6, y0 - 10, 12, 8, "#cfd4dc"); px(cx - 6, y0 - 3, 12, 1, "#9aa1ab");
+  if (owner) px(cx - 1, y0 - 7, 3, 3, KIND[owner.kind].logo);
+  px(x0 + 4, y0 - 3, 7, 5, "#f5f5f5"); px(x0 + 5, y0 - 2, 5, 1, "#c9c9c9");
+  px(x0 + 24, y0 - 4, 4, 4, "#fff"); px(x0 + 24, y0 - 4, 4, 1, "#6b3e26");
+}
+
+function drawDeco(d, t) {
+  const X = d.x * T, Y = d.y * T;
+  switch (d.t) {
+    case "plant":
+      px(X + 4, Y + 6, 8, 9, "#a0522d"); px(X + 3, Y + 5, 10, 2, "#b5653a");
+      for (const [a, b, r] of [[8, -2, 6], [4, 1, 4], [12, 1, 4], [8, -7, 4]]) { ctx.fillStyle = r > 5 ? "#3f8f4f" : "#52a862"; ctx.beginPath(); ctx.arc(X + a, Y + b, r, 0, 7); ctx.fill(); }
+      break;
+    case "vending":
+      px(X + 1, Y - 16, 14, 31, "#c0392b"); px(X + 3, Y - 13, 10, 14, "#9ad1e8");
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) px(X + 4 + j * 5, Y - 12 + i * 5, 3, 3, ["#f4d35e", "#ee6352", "#59cd90"][(i + j) % 3]);
+      px(X + 3, Y + 5, 10, 4, "#2b2b2b"); px(X + 12, Y - 2, 2, 4, "#f5c542");
+      break;
+    case "cooler":
+      px(X + 3, Y - 2, 10, 17, "#e8ecf0"); px(X + 4, Y - 13, 8, 11, "rgba(90,170,240,.75)"); px(X + 5, Y - 15, 6, 2, "#3b82c4");
+      px(X + 6, Y + 3, 4, 2, "#3b82c4");
+      break;
+    case "coffee":
+      px(X, Y - 2, 2 * T, 17, "#8a5a3a"); px(X, Y - 3, 2 * T, 3, "#a87148");
+      px(X + 4, Y - 16, 12, 14, "#2b2b2b"); px(X + 6, Y - 13, 8, 4, "#555"); px(X + 13, Y - 15, 2, 2, (Math.floor(t * 2) % 2) ? "#e63946" : "#7a1f25");
+      px(X + 20, Y - 7, 4, 4, "#fff"); px(X + 25, Y - 7, 4, 4, "#fff");
+      ctx.fillStyle = "rgba(255,255,255,.5)"; ctx.fillRect(X + 9 + Math.sin(t * 3) * 1, Y - 20 - (t * 6 % 5), 1, 3);
+      break;
+    case "sofa":
+      px(X - 2, Y - 8, 3 * T + 4, 10, "#4a68c4"); px(X, Y + 1, 3 * T, 10, "#6d8ce0"); px(X - 3, Y - 4, 5, 15, "#3f5bb0"); px(X + 3 * T - 2, Y - 4, 5, 15, "#3f5bb0");
+      px(X + 15, Y + 2, 1, 8, "#5c7bd0"); px(X + 31, Y + 2, 1, 8, "#5c7bd0"); px(X + 4, Y - 6, 8, 6, "#f4a261");
+      break;
+    case "table":
+      px(X + 2, Y + 1, 2 * T - 4, 9, "#b07a4f"); px(X + 2, Y + 10, 2 * T - 4, 3, "#8a5a3a");
+      px(X + 8, Y - 1, 4, 4, "#fff"); px(X + 18, Y + 2, 7, 5, "#f5f5f5");
+      break;
+    case "arcade": {
+      px(X + 1, Y - 16, 14, 31, "#6d28d9"); px(X + 1, Y - 16, 14, 3, "#a78bfa");
+      const cols = ["#22d3ee", "#f472b6", "#facc15", "#4ade80"];
+      px(X + 3, Y - 11, 10, 9, "#111"); px(X + 4 + Math.floor(t * 3) % 6, Y - 9 + Math.floor(t * 5) % 4, 3, 3, cols[Math.floor(t) % 4]);
+      px(X + 3, Y, 10, 3, "#2b2b2b"); px(X + 5, Y - 1, 2, 2, "#e63946"); px(X + 9, Y, 2, 2, "#facc15");
+      break;
+    }
+    case "boss":
+      px(X, Y - 6, 3 * T, 12, "#5d3a1a"); px(X, Y - 6, 3 * T, 1, "#7a4e26"); px(X, Y + 6, 3 * T, 8, "#4a2e14");
+      px(X + 18, Y - 13, 14, 9, "#222"); px(X + 19, Y - 12, 12, 7, "#2d3748"); px(X + 24, Y - 4, 2, 2, "#222");
+      px(X + 4, Y - 3, 12, 5, "#f5c542"); ctx.fillStyle = "#2a2418"; ctx.font = "bold 4px sans-serif"; ctx.textAlign = "center"; ctx.fillText("CEO", X + 10, Y - 0.5);
+      px(X + 38, Y - 4, 4, 4, "#fff");
+      break;
+  }
+}
+const decoKey = d => (d.y + 1) * T - (d.t === "boss" ? 2 : 1);
+
+// ============================================================ 카메라 & 루프
+const view = { scale: 2, camX: 0, camY: 0, dpr: 1, w: 0, h: 0, left: 0, right: 0 };
+let TOP_H = 60, BOT_H = 108;
+function resize() {
+  TOP_H = $("top").offsetHeight + 10;
+  BOT_H = $("bottom").offsetHeight + 10;
+  view.dpr = window.devicePixelRatio || 1;
+  view.w = innerWidth; view.h = innerHeight;
+  cv.width = Math.round(view.w * view.dpr); cv.height = Math.round(view.h * view.dpr);
+}
+addEventListener("resize", resize);
+let panelW = -1;
+function layoutPanels() {
+  const availH = view.h - TOP_H - BOT_H;
+  const fit = Math.max(2, Math.min(5, availH / (H * T)));
+  const spare = (view.w - W * T * fit) / 2 - 12;
+  const want = spare >= 200 ? Math.floor(Math.min(340, spare)) : view.w >= 1100 ? 220 : 0;
+  if (want !== panelW) {
+    panelW = want;
+    for (const id of ["sideL", "sideR"]) {
+      const el = $(id);
+      el.hidden = !want;
+      el.style.width = want + "px";
+    }
+    if (want) renderSide();
+  }
+  for (const id of ["sideL", "sideR"]) { $(id).style.top = TOP_H + "px"; $(id).style.bottom = BOT_H + "px"; }
+  view.left = want ? want + 12 : 0;
+  view.right = view.w - view.left;
+}
+function updateCamera() {
+  layoutPanels();
+  const availH = view.h - TOP_H - BOT_H, midW = view.right - view.left;
+  view.scale = Math.max(2, Math.min(5, midW / (W * T), availH / (H * T)));
+  const vw = midW / view.scale, vh = availH / view.scale;
+  const clampC = (c, v, world) => world <= v ? (world - v) / 2 : Math.max(0, Math.min(world - v, c));
+  view.camX = clampC(player.x - vw / 2, vw, W * T) - view.left / view.scale;
+  view.camY = clampC(player.y - 12 - vh / 2, vh, H * T) - TOP_H / view.scale;
+}
+function screenToWorld(sx, sy) { return { x: sx / view.scale + view.camX, y: sy / view.scale + view.camY }; }
+function worldToScreen(x, y) { return { x: (x - view.camX) * view.scale, y: (y - view.camY) * view.scale }; }
+
+function draw(t) {
+  const { dpr, scale } = view;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#1b1d24"; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.imageSmoothingEnabled = false;
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, Math.round(-view.camX * dpr * scale), Math.round(-view.camY * dpr * scale));
+  drawRoom(t);
+
+  const owners = new Map();
+  for (const n of npcs.values()) if (n.slot != null && !n.leaving) owners.set(n.slot, n);
+  const items = [];
+  for (const s of slots) items.push({ y: s.deskY * T + 13, f: () => drawDesk(s, owners.get(s.idx), t) });
+  for (const d of deco) items.push({ y: decoKey(d), f: () => drawDeco(d, t) });
+  for (const n of npcs.values()) {
+    items.push({ y: n.y, f: () => drawNpc(n, t) });
+    for (const h of shownHelpers(n)) items.push({ y: h.y, f: () => drawHelper(h, t) });
+  }
+  items.push({ y: player.y, f: () => drawChar(ctx, player.x, player.y, player.look, { dir: player.dir, anim: player.anim, moving: player.moving }) });
+  items.sort((a, b) => a.y - b.y).forEach(i => i.f());
+
+  const hr = new Date().getHours();
+  if (hr < 6 || hr >= 19) { ctx.fillStyle = "rgba(15,25,60,.22)"; ctx.fillRect(0, 0, W * T, H * T); }
+
+  // 머리 위 라벨 (화면 좌표에서 선명하게)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const near = dlg ? null : nearestNpc();
+  [...npcs.values()].sort((a, b) => a.y - b.y).forEach(n => drawLabel(n, t, n === near));
+  for (const n of npcs.values()) for (const h of shownHelpers(n)) drawHelperLabel(h, t);
+  drawPopups(t);
+  if (!near && !dlg) {
+    const ps = worldToScreen(player.x, player.y - 30);
+    pill(ps.x, ps.y - 8, "👑 사장님", "#f5c542", "#2a2418", 11);
+  }
+}
+
+function drawPopups(t) {
+  for (let i = popups.length - 1; i >= 0; i--) {
+    const p = popups[i], age = t - p.t0;
+    if (age > 2.4 || !npcs.has(p.n.pid)) { popups.splice(i, 1); continue; }
+    if (age < 0) continue;
+    const top = worldToScreen(p.n.x, p.n.y - 27);
+    ctx.globalAlpha = Math.max(0, Math.min(1, age * 6, 1 - (age - 1.6) / .8));
+    const pop = 1 + Math.max(0, .25 - age) * 1.6;
+    ctx.save(); ctx.translate(top.x, top.y - 66 - age * 20); ctx.scale(pop, pop);
+    pill(0, 0, p.text, p.kind === "tool" ? "#ffe08a" : "#bfe3ff", "#3a2a1a", 12);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawNpc(n, t) {
+  const m = mood(n.data), sit = seated(n);
+  ctx.globalAlpha = Math.max(0, n.alpha);
+  drawChar(ctx, n.x, n.y, n.look, {
+    dir: n.dir, anim: n.anim, moving: n.moving, sit,
+    typing: sit && m === "work", sleep: sit && m === "sleep", mug: m === "rest" && !n.moving,
+    talking: dlg && dlg.npc === n && Math.floor(t * 6) % 2,
+  });
+  // 졸음 Zzz, 과로 땀방울
+  if (sit && m === "sleep") {
+    ctx.fillStyle = "#4b5ea8"; ctx.font = "bold 6px monospace"; ctx.textAlign = "left";
+    for (let i = 0; i < 3; i++) { const p = (t * .5 + i / 3) % 1; ctx.globalAlpha = 1 - p; ctx.fillText("z", n.x + 5 + p * 8, n.y - 22 - p * 12); }
+    ctx.globalAlpha = 1;
+  }
+  const pct = ctxPct(n.data);
+  if (pct != null && pct >= 80 && m === "work") { const p = (t * .8) % 1; px(n.x + 7, n.y - 22 + p * 6, 2, 3, "#6ec3ff"); }
+  ctx.globalAlpha = 1;
+}
+
+function pill(cx, cy, text, bg, fg, size = 11, tail = false) {
+  ctx.font = `700 ${size}px -apple-system, "Noto Sans KR", sans-serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const w = ctx.measureText(text).width + 10, h = size + 7;
+  ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 5); ctx.fill();
+  if (tail) { ctx.beginPath(); ctx.moveTo(cx - 4, cy + h / 2 - .5); ctx.lineTo(cx + 4, cy + h / 2 - .5); ctx.lineTo(cx, cy + h / 2 + 4); ctx.fill(); }
+  ctx.fillStyle = fg; ctx.fillText(text, cx, cy + .5);
+  return w;
+}
+function drawLabel(n, t, near) {
+  const s = n.data, top = worldToScreen(n.x, n.y - 27);
+  ctx.globalAlpha = Math.max(0, n.alpha);
+  // 피로도 바 (컨텍스트)
+  const pct = ctxPct(s);
+  let y = top.y - 4;
+  if (pct != null) {
+    const bw = 34;
+    ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(top.x - bw / 2 - 1, y - 1, bw + 2, 5);
+    ctx.fillStyle = pct >= 80 ? "#f05252" : pct >= 50 ? "#f5a524" : "#3ecf8e";
+    ctx.fillRect(top.x - bw / 2, y, bw * pct / 100, 3);
+  }
+  y -= 11;
+  let name = displayName(s); if (name.length > 12) name = name.slice(0, 11) + "…";
+  pill(top.x, y, name, KIND[s.kind].color, "#fff", 11);
+  y -= 21;
+  const m = mood(s);
+  const bob = m === "work" ? Math.sin(t * 4 + n.pid) * 1.5 : 0;
+  const bw = pill(top.x, y + bob, badge(s), "#fffdf5", "#2a2418", 12, true);
+  if (n.pid === hoverPid) {
+    ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#f5c542";
+    ctx.strokeStyle = "#3a2a1a"; ctx.lineWidth = 3;
+    const ay = y - 22 + Math.sin(t * 8) * 3;
+    ctx.strokeText("▼", top.x, ay); ctx.fillText("▼", top.x, ay); ctx.lineWidth = 1;
+  }
+  if (near) {
+    const p = 1 + Math.sin(t * 6) * .12;
+    ctx.font = `${16 * p}px sans-serif`; ctx.textAlign = "left";
+    ctx.fillText("💬", top.x + bw / 2 + 4, y + bob);
+  }
+  ctx.globalAlpha = 1;
+}
+
+let lastT = performance.now();
+function frame(ms) {
+  const dt = Math.min(.05, (ms - lastT) / 1000); lastT = ms;
+  const t = ms / 1000;
+  if (!firstSync) {
+    updatePlayer(dt);
+    for (const n of [...npcs.values()]) { updateNpc(n, dt); updateHelpers(n, dt); }
+    updateCamera();
+    draw(t);
+    if (dlg) {
+      const full = dlg.pages[dlg.page];
+      if (dlg.shown < full.length) { dlg.shown = Math.min(full.length, dlg.shown + dt * 55); renderDialogText(); }
+    }
+    const n = !dlg && nearestNpc();
+    const narrow = innerWidth < 640;
+    $("hint").textContent = n ? `${narrow ? "탭" : "Space 또는 탭"}: 「${displayName(n.data)}」에게 보고 받기`
+      : narrow ? "탭해서 이동 · 직원을 탭하면 보고" : "방향키·WASD 또는 화면 탭으로 이동 · 직원을 탭하면 다가가서 보고를 받아요";
+  }
+  const d = new Date();
+  const wk = Math.ceil((d.getDate() + new Date(d.getFullYear(), d.getMonth(), 1).getDay()) / 7);
+  $("date").textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${wk}주 (${"일월화수목금토"[d.getDay()]}) `
+    + d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  requestAnimationFrame(frame);
+}
+
+// ============================================================ 직원 명부 / 보고서
+let modalKind = null;
+function openModal(kind) {
+  modalKind = kind;
+  closeDialog();
+  $("modal").hidden = false;
+  if (kind === "staff") renderStaff(); else renderReport();
+}
+function closeModal() { $("modal").hidden = true; modalKind = null; }
+$("bStaff").onclick = () => openModal("staff");
+$("bReport").onclick = () => openModal("report");
+$("mClose").onclick = closeModal;
+$("modal").addEventListener("pointerdown", e => { if (e.target.id === "modal") closeModal(); });
+
+function portraitHTML(n, cls = "portrait") {
+  const c = document.createElement("canvas");
+  c.width = 28; c.height = 28; c.className = cls;
+  drawChar(c.getContext("2d"), 14, 27, n.look, { dir: "down", noShadow: true, sleep: mood(n.data) === "sleep" });
+  return c;
+}
+function gauge(label, pct, value, color) {
+  const col = color || (pct >= 60 ? "var(--ok)" : pct >= 25 ? "var(--mid)" : "var(--bad)");
+  return `<div class="stat"><span class="k">${label}</span><span class="gauge"><i style="width:${pct == null ? 0 : Math.max(2, pct)}%;background:${col}"></i></span><span class="v">${value}</span></div>`;
+}
+const MOOD_TXT = { work: "⌨️ 근무 중", rest: "☕ 휴식 중", sleep: "💤 조는 중", stopped: "⛔ 정지", unknown: "❓ 불명" };
+const activeStaff = () => [...npcs.values()].filter(n => !n.leaving);
+function renderStaff() {
+  const order = { work: 0, rest: 1, sleep: 2, stopped: 3, unknown: 4 };
+  const list = activeStaff().sort((a, b) => order[mood(a.data)] - order[mood(b.data)] || b.data.elapsed - a.data.elapsed);
+  $("mTitle").textContent = `👥 직원 명부 (${list.length}명)`;
+  const wrap = document.createElement("div"); wrap.className = "staff";
+  for (const n of list) {
+    const s = n.data, pct = ctxPct(s), fl = FLAMES[s.effort];
+    const lastAct = (s.activity || []).slice(-1)[0];
+    const card = document.createElement("div"); card.className = "card";
+    card.appendChild(portraitHTML(n));
+    const info = document.createElement("div"); info.className = "info";
+    info.innerHTML = `<div class="nm">${esc(displayName(s))} <span class="chip" style="background:${KIND[s.kind].color}">${KIND[s.kind].label}</span></div>
+      <div class="sub">${esc(jobTitle(s))} · ${esc(s.model || "?")}</div>
+      ${gauge("체력", pct == null ? null : 100 - pct, pct == null ? "?" : `${Math.round(100 - pct)}%`)}
+      ${gauge("집중력", fl == null ? null : fl / 5 * 100, esc(s.effort || "?"), "#e8833a")}
+      ${gauge("근속", Math.min(100, Math.log10(1 + (s.elapsed || 0) / 60) / Math.log10(1 + 43200) * 100), shortDur(s.elapsed), "#8b5cf6")}
+      <div class="act"><span class="st">${MOOD_TXT[mood(s)]} · ${lastAct ? esc(lastAct.text) : "기록 없음"}</span></div>`;
+    const btn = document.createElement("button"); btn.className = "mini"; btn.textContent = "📣 보고 받기";
+    btn.onclick = () => { closeModal(); callOver(n); };
+    info.querySelector(".act").appendChild(btn);
+    card.appendChild(info);
+    wrap.appendChild(card);
+  }
+  $("mBody").replaceChildren(wrap);
+}
+function callOver(n) {
+  talkTarget = n;
+  if (dist(player, n) < 24) { openDialog(n); talkTarget = null; return; }
+  const pt = tileOf(player), tt = tileOf(n);
+  player.path = findPath(pt.x, pt.y, tt.x, tt.y) || [];
+}
+function renderReport() {
+  const list = activeStaff(), S = list.map(n => n.data);
+  $("mTitle").textContent = "📊 경영 보고서";
+  const cnt = f => S.filter(f).length;
+  const pcts = S.map(ctxPct).filter(v => v != null);
+  const cost = S.reduce((a, s) => a + (s.cost_usd || 0), 0);
+  let html = `<div class="rep"><h3>회사 개요</h3><table>
+    <tr><th>총 직원</th><td>${S.length}명 (상주 ${cnt(s => s.mode !== "headless")} · 외주 ${cnt(s => s.mode === "headless")})</td></tr>
+    <tr><th>근무 현황</th><td>⌨️ ${cnt(s => mood(s) === "work")} · ☕ ${cnt(s => mood(s) === "rest")} · 💤 ${cnt(s => mood(s) === "sleep")}</td></tr>
+    <tr><th>인턴</th><td>🐣 ${S.reduce((a, s) => a + helperBusy(s).length, 0)}명 근무 중 (서브에이전트)</td></tr>
+    <tr><th>평균 피로도</th><td>${pcts.length ? (pcts.reduce((a, b) => a + b, 0) / pcts.length).toFixed(1) + "%" : "-"}</td></tr>
+    <tr><th>집계된 경비</th><td>${cost ? "$" + cost.toFixed(2) + " (Grok 세션 기준)" : "-"}</td></tr>
+  </table><h3>부서별 현황</h3><table><tr><th>부서</th><th>인원</th><th>근무</th><th>사용 모델</th></tr>`;
+  for (const k of Object.keys(KIND)) {
+    const ks = S.filter(s => s.kind === k);
+    if (!ks.length) continue;
+    const models = [...new Set(ks.map(s => s.model).filter(Boolean))].join(", ");
+    html += `<tr><td><span class="chip" style="background:${KIND[k].color}">${KIND[k].label}</span></td><td>${ks.length}</td>
+      <td>${ks.filter(s => mood(s) === "work").length}</td><td>${esc(models || "-")}</td></tr>`;
+  }
+  html += `</table><h3>🏆 이달의 직원</h3><div class="awards" id="awards"></div></div>`;
+  $("mBody").innerHTML = html;
+
+  const pick = (f, score) => { let b = null, bs = -Infinity; for (const n of list) if (f(n.data)) { const v = score(n.data); if (v > bs) { bs = v; b = n; } } return b; };
+  const awards = [
+    ["🏅 최고참상", pick(() => true, s => s.elapsed), s => `근속 ${longDur(s.elapsed)}`],
+    ["⚡ 열일상", pick(s => mood(s) === "work", s => (s.activity || []).slice(-1)[0]?.t || 0), s => `지금도 근무 중 · ${shortDur(now() - (s.status_since || now() - s.elapsed))}째`],
+    ["🔥 몰입상", pick(s => s.effort in FLAMES, s => FLAMES[s.effort] * 1e9 - (s.elapsed || 0)), s => `추론 깊이 ${s.effort} ${flames(s.effort)}`],
+    ["😵 과로 주의", pick(s => ctxPct(s) != null, s => ctxPct(s)), s => `피로도 ${ctxPct(s).toFixed(1)}%`],
+    ["😴 잠꾸러기상", pick(s => mood(s) === "sleep", s => idleSecs(s)), s => `${longDur(idleSecs(s))}째 대기 중`],
+  ];
+  const box = $("awards");
+  for (const [what, n, why] of awards) {
+    if (!n) continue;
+    const el = document.createElement("div"); el.className = "award";
+    el.appendChild(portraitHTML(n));
+    el.insertAdjacentHTML("beforeend", `<div><div class="what">${what}</div><div class="who2">${esc(displayName(n.data))}</div><div class="why">${esc(why(n.data))}</div></div>`);
+    el.style.cursor = "pointer"; el.onclick = () => { closeModal(); callOver(n); };
+    box.appendChild(el);
+  }
+}
+
+let hoverPid = null;
+function sideRow(n) {
+  const s = n.data, pct = ctxPct(s), lastAct = (s.activity || []).slice(-1)[0];
+  const row = document.createElement("div");
+  row.className = "row" + (hoverPid === n.pid ? " on" : "");
+  row.appendChild(portraitHTML(n));
+  const col = pct == null ? "" : pct >= 80 ? "var(--bad)" : pct >= 50 ? "var(--mid)" : "var(--ok)";
+  row.insertAdjacentHTML("beforeend", `<div class="info">
+    <div class="nm"><span>${esc(displayName(s))}</span><span class="chip" style="background:${KIND[s.kind].color}">${KIND[s.kind].label}</span></div>
+    <div class="st">${esc(badge(s))} · ${esc((s.model || "?").replace(/^claude-/, ""))} ${flames(s.effort)}</div>
+    <div class="gauge" title="피로도(컨텍스트)"><i style="width:${pct ?? 0}%;background:${col}"></i></div>
+    <div class="la">${lastAct ? esc(lastAct.text) : esc(s.task || "기록 없음")}</div></div>`);
+  row.onmouseenter = () => { hoverPid = n.pid; row.classList.add("on"); };
+  row.onmouseleave = () => { if (hoverPid === n.pid) hoverPid = null; row.classList.remove("on"); };
+  row.onclick = () => callOver(n);
+  return row;
+}
+function renderSide() {
+  if (!panelW) return;
+  const list = activeStaff();
+  const L = list.filter(n => mood(n.data) === "work")
+    .sort((a, b) => (b.data.status_since || 0) - (a.data.status_since || 0));
+  const R = list.filter(n => mood(n.data) !== "work")
+    .sort((a, b) => idleSecs(a.data) - idleSecs(b.data));
+  const fill = (id, cnt, rows, empty) => {
+    $(cnt).textContent = `(${rows.length})`;
+    if (!rows.length) { $(id).innerHTML = `<div class="empty">${empty}</div>`; return; }
+    $(id).replaceChildren(...rows.map(sideRow));
+  };
+  fill("listL", "cntL", L, "지금은 모두 쉬는 중이에요 ☕");
+  fill("listR", "cntR", R, "전원 열일 중! 🔥");
+}
+
+renderLog();
+resize();
+sync();
+setInterval(sync, 3000);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
