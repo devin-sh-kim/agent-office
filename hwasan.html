@@ -1192,8 +1192,8 @@ function paintBG(g, hr) {
   }
   // 담 너머 매화
   for (const [bx, by] of [[1.6 * T, 26], [25.2 * T, 28]]) for (let i = 0; i < 46; i++) {
-    const h2 = hash(`w${bx}${i}`), a = (h2 % 628) / 100, r = (h2 >> 10) % 14;
-    P(Math.round(bx + Math.cos(a) * r * 1.3), Math.round(by + Math.sin(a) * r * .7), 2, 2, dim(PETAL_COL[(h2 >> 4) % 5]));
+    const h2 = hash(`w${bx}${i}`), a = (h2 % 628) / 100, r = (h2 >>> 10) % 14;
+    P(Math.round(bx + Math.cos(a) * r * 1.3), Math.round(by + Math.sin(a) * r * .7), 2, 2, dim(PETAL_COL[(h2 >>> 4) % 5]));
   }
   // ---- 본전
   const X0 = HALL.x0, X1 = HALL.x1, CX = (X0 + X1) / 2;
@@ -1240,7 +1240,7 @@ function paintBG(g, hr) {
     const X = x * T, Y = y * T, hv = hash(x * 131 + y * 7);
     if (x >= 19) {
       P(X, Y, T, T, (x + y) % 2 ? "#9cc283" : "#97bd7d");
-      for (let i = 0; i < 3; i++) { const h2 = hash(hv + i); P(X + h2 % 15, Y + (h2 >> 4) % 14, 1, 2, "#7fa86a"); }
+      for (let i = 0; i < 3; i++) { const h2 = hash(hv + i); P(X + h2 % 15, Y + (h2 >>> 4) % 14, 1, 2, "#7fa86a"); }
       if (hv % 3 === 0) P(X + (hv >> 8) % 14, Y + (hv >> 12) % 14, 2, 1, "#f5b9c8");
       continue;
     }
@@ -1301,11 +1301,11 @@ function plumTree() {
   P(21, 30, 6, 22, "#4a2f27"); P(20, 44, 2, 8, "#4a2f27"); P(27, 46, 2, 6, "#4a2f27"); P(23, 30, 1, 20, "#6a4636"); P(25, 36, 3, 3, "#3a231d");
   line(23, 32, 9, 18, 2, "#4a2f27"); line(25, 30, 39, 14, 2, "#4a2f27"); line(24, 30, 25, 8, 2, "#4a2f27"); line(30, 24, 43, 27, 1, "#4a2f27"); line(15, 24, 5, 28, 1, "#4a2f27");
   for (let i = 0; i < 110; i++) {
-    const h2 = hash("tree" + i), a = (h2 % 628) / 100, r = Math.sqrt(((h2 >> 9) % 1000) / 1000);
+    const h2 = hash("tree" + i), a = (h2 % 628) / 100, r = Math.sqrt(((h2 >>> 9) % 1000) / 1000);
     const x = Math.round(24 + Math.cos(a) * r * 21), y = Math.round(19 + Math.sin(a) * r * 15);
-    const col = PETAL_COL[(h2 >> 4) % 5];
+    const col = PETAL_COL[(h2 >>> 4) % 5];
     P(x, y, 2, 2, col);
-    if ((h2 >> 13) % 5 === 0) { P(x - 1, y, 1, 1, col); P(x + 2, y + 1, 1, 1, col); P(x, y, 1, 1, "#d85a7a"); }
+    if ((h2 >>> 13) % 5 === 0) { P(x - 1, y, 1, 1, col); P(x + 2, y + 1, 1, 1, col); P(x, y, 1, 1, "#d85a7a"); }
   }
   return treeSpr;
 }
